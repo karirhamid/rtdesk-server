@@ -137,7 +137,12 @@ export class Session {
     this.config = config;
     this.sinks = sinks;
     this.serverEdPk = decodeB64(config.serverKeyB64);
-    this.sessionId = randomSessionId();
+    // Shared by every connection of one UI session (see SessionConfig.sessionId): the peer
+    // lets a follow-up connection in on the password that session already used, which
+    // matters because a one-time password is replaced as soon as it has been used.
+    this.sessionId = /^[0-9]{1,19}$/.test(config.sessionId ?? '')
+      ? BigInt(config.sessionId!)
+      : randomSessionId();
   }
 
   get currentState(): SessionState {

@@ -141,6 +141,7 @@ export function buildSessionConfig(
   password: string,
   savedHashHex?: string,
   connType?: SessionConfig['connType'],
+  sessionId?: string,
 ): SessionConfig {
   return {
     peerId,
@@ -153,7 +154,16 @@ export function buildSessionConfig(
     ...(g.signalToken ? { signalToken: g.signalToken } : {}),
     savedHashHex,
     ...(connType ? { connType } : {}),
+    ...(sessionId ? { sessionId } : {}),
   };
+}
+
+/** A random session id (decimal u63), the same shape the session core makes for itself. */
+export function newSessionId(): string {
+  const b = new Uint8Array(8);
+  globalThis.crypto.getRandomValues(b);
+  b[0]! &= 0x7f;
+  return new DataView(b.buffer).getBigUint64(0).toString();
 }
 
 export function displayToRect(d: DisplayInfo): DisplayRect {

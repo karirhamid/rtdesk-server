@@ -42,6 +42,7 @@ import {
   QUALITY,
   STATE_LABEL,
   buildSessionConfig,
+  newSessionId,
   buildTypeCommands,
   clearSavedHash,
   cursorCss,
@@ -836,7 +837,7 @@ export class RdApp {
       toast: (msg) => this.toast(msg),
       getConfig: () => {
         if (!this.cfg || this.state !== 'streaming') return null;
-        return buildSessionConfig(this.cfg, this.peerId, '', this.sessionHashHex, 'fileTransfer');
+        return buildSessionConfig(this.cfg, this.peerId, '', this.sessionHashHex, 'fileTransfer', this.reconnectConfig?.sessionId);
       },
     });
     this.filePanel.open();
@@ -855,7 +856,7 @@ export class RdApp {
         getConfig: () => {
           if (!this.cfg || this.state !== 'streaming' || !this.terminalSupported
               || !remoteInputAllowed(this.viewOnly, 'terminal')) return null;
-          return buildSessionConfig(this.cfg, this.peerId, '', this.sessionHashHex, 'terminal');
+          return buildSessionConfig(this.cfg, this.peerId, '', this.sessionHashHex, 'terminal', this.reconnectConfig?.sessionId);
         },
       });
     }
@@ -870,7 +871,7 @@ export class RdApp {
         toast: (message) => this.toast(message),
         getConfig: () => {
           if (!this.cfg || this.state !== 'streaming' || !this.cameraSupported) return null;
-          return buildSessionConfig(this.cfg, this.peerId, '', this.sessionHashHex, 'viewCamera');
+          return buildSessionConfig(this.cfg, this.peerId, '', this.sessionHashHex, 'viewCamera', this.reconnectConfig?.sessionId);
         },
       });
     }
@@ -1862,6 +1863,8 @@ export class RdApp {
 
   private startSession(config: SessionConfig): void {
     this.teardown();
+    // One session id for this connection and everything opened from it; a reconnect keeps it.
+    if (!config.sessionId) config = { ...config, sessionId: newSessionId() };
     // Retain only the challenge-independent password hash for reconnects. The
     // typed plaintext is transferred to the worker and never kept in UI state.
     this.reconnectConfig = { ...config, password: '' };
