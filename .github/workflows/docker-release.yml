@@ -36,7 +36,8 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           images: |
-            ghcr.io/${{ github.repository }}
+            # The package name is fixed, not the repository's: it is what servers pull.
+            ghcr.io/karirhamid/rtdesk-server
           tags: |
             type=sha
             type=semver,pattern={{version}}
