@@ -259,7 +259,7 @@ export class RdApp {
   private cursorScale = 1;
   private remoteCursorHot = { x: 0, y: 0 };
   private platformAdditions = '';
-  private sideTab: SideTab = 'files';
+  private sideTab: SideTab = 'chat';
   private chatLog: ChatEntry[] = [];
   private chatUnread = 0;
   private voiceCall: VoiceCaptureController | undefined;
@@ -698,14 +698,12 @@ export class RdApp {
     this.el.side.innerHTML = `
       <header class="rd-side-head">
         <div class="rd-side-tabs" role="tablist">
-          ${tab('files', 'folderTransfer', 'Files')}
           ${tab('chat', 'chat', 'Chat')}
           ${tab('details', 'info', 'Details')}
         </div>
         <button type="button" class="rd-ib" id="rd-side-close" title="Close panel" aria-label="Close panel">${iconHtml('close')}</button>
       </header>
       <div class="rd-side-body">
-        <section class="rd-pane" data-pane="files" hidden></section>
         <section class="rd-pane rd-pane-chat" data-pane="chat" hidden>
           <div class="rd-voice-call">
             <button type="button" class="rd-voice-call-btn" id="rd-voice-call" aria-describedby="rd-voice-call-status">Voice call</button>
@@ -777,17 +775,21 @@ export class RdApp {
       this.toast('Connect to a device first');
       return;
     }
+    // Files is a window over the session (like AnyDesk's file manager), not a
+    // tab of the narrow side panel: the button opens and closes it.
+    if (tabName === 'files') {
+      if (this.permissions.File === false) {
+        this.toast('Ce poste n’autorise pas le transfert de fichiers');
+        return;
+      }
+      if (this.filePanel?.isOpen) this.filePanel.close();
+      else this.ensureFilePanel();
+      return;
+    }
     // Same tab, already open -> the dock button acts as a toggle.
     if (this.sideOpen && this.sideTab === tabName) {
       this.closeSide();
       return;
-    }
-    if (tabName === 'files') {
-      if (this.permissions.File === false) {
-        this.toast('This device does not permit file transfer');
-        return;
-      }
-      this.ensureFilePanel();
     }
     this.sideTab = tabName;
     this.el.side.classList.add('rd-open');
@@ -801,7 +803,6 @@ export class RdApp {
       p.hidden = p.dataset.pane !== tabName;
     }
     for (const [id, on] of [
-      ['rd-btn-files', tabName === 'files'],
       ['rd-btn-chat', tabName === 'chat'],
       ['rd-btn-session', tabName === 'details'],
     ] as const) {
@@ -818,21 +819,25 @@ export class RdApp {
   private closeSide(): void {
     this.el.side.classList.remove('rd-open');
     this.el.root.classList.remove('rd-side-is-open');
-    for (const id of ['rd-btn-files', 'rd-btn-chat', 'rd-btn-session']) {
+    for (const id of ['rd-btn-chat', 'rd-btn-session']) {
       this.el.dock.querySelector(`#${id}`)?.classList.remove('rd-on');
     }
   }
 
-  // The file panel mounts INSIDE the Files pane. Its FILE_TRANSFER connection
-  // reuses this session's h1 credential — no second password prompt.
+  // The file window mounts on the page root (so it stays visible in full screen).
+  // Its FILE_TRANSFER connection reuses this session's credential and session
+  // id — no second password prompt.
   private ensureFilePanel(): void {
     if (this.filePanel) {
       this.filePanel.open();
       return;
     }
-    const pane = q<HTMLElement>(this.el.side, '[data-pane="files"]');
     this.filePanel = new FilePanel({
-      viewport: pane,
+      viewport: this.el.root,
+      onToggle: (open) => {
+        this.el.dock.querySelector('#rd-btn-files')?.classList.toggle('rd-on', open);
+        this.el.edge.querySelector('[data-open="files"]')?.classList.toggle('rd-on', open);
+      },
       workerUrl: this.workerUrl,
       toast: (msg) => this.toast(msg),
       getConfig: () => {
@@ -2498,7 +2503,6 @@ export class RdApp {
       if (!enabled) {
         this.filePanel?.destroy();
         this.filePanel = undefined;
-        if (this.sideOpen && this.sideTab === 'files') this.closeSide();
       }
     }
 

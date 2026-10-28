@@ -1,11 +1,12 @@
 // RTDesk web client — in-session file-transfer panel.
 //
-// Slides over the live desktop viewport (no separate window, no second login):
-// the panel opens its own FILE_TRANSFER relay connection to the same peer,
-// authenticating silently with the h1 credential the desktop session already
-// proved. Dual-pane manager in the RTDesk style: local computer left,
-// remote computer right, Send/Receive between them, transfer queue + event
-// log at the bottom, close (×) returns to the desktop.
+// A window over the live session (no second login): the panel opens its own
+// FILE_TRANSFER relay connection to the same peer, authenticating silently with
+// the credential the desktop session already proved. Laid out like AnyDesk's
+// file manager: this computer left, the remote computer right, Send / Receive
+// between them, the transfers underneath. Lists look like the macOS Finder
+// (ft-icons.ts) and only the rows that change are touched on selection, so a
+// large folder stays fast.
 //
 // Local side is the browser, so "local" means:
 //   - Chromium: a real directory opened with showDirectoryPicker() — browse,
@@ -31,7 +32,8 @@ import {
   joinRemote,
   parentRemote,
 } from '../core/file-transfer';
-import { escapeHtml, iconHtml } from './common';
+import { escapeHtml, iconHtml, type IconName } from './common';
+import { ensureFtSprite, ftDate, ftEta, ftIcon, ftKind, ftSize } from './ft-icons';
 
 type PickerWindow = Window & {
   showDirectoryPicker?(opts?: { mode?: 'read' | 'readwrite' }): Promise<FileSystemDirectoryHandle>;
@@ -103,30 +105,39 @@ export type FilePanelOpts = {
   // Built fresh on every (re)connect — must carry connType:'fileTransfer' and
   // the session's h1 credential; null when the desktop session isn't ready.
   getConfig: () => SessionConfig | null;
+  /** Told when the window opens or closes (the dock button shows it). */
+  onToggle?: (open: boolean) => void;
 };
+
+type Side = 'local' | 'remote';
 
 type Els = {
   panel: HTMLElement;
   status: HTMLElement;
   btnHidden: HTMLButtonElement;
   localSub: HTMLElement;
-  localPath: HTMLInputElement;
+  localCrumbs: HTMLElement;
   localBody: HTMLElement;
   localFoot: HTMLElement;
   localEmpty: HTMLElement;
   remoteSub: HTMLElement;
+  remoteCrumbs: HTMLElement;
   remotePath: HTMLInputElement;
   remoteBody: HTMLElement;
   remoteFoot: HTMLElement;
   remoteEmpty: HTMLElement;
   btnSend: HTMLButtonElement;
   btnRecv: HTMLButtonElement;
-  tabJobs: HTMLButtonElement;
-  tabLog: HTMLButtonElement;
+  btnLog: HTMLButtonElement;
+  btnClear: HTMLButtonElement;
+  queueSum: HTMLElement;
   jobsWrap: HTMLElement;
   logWrap: HTMLElement;
   dialog: HTMLElement;
 };
+
+/** Drag between the two lists carries which side it came from. */
+const DRAG_TYPE = 'application/x-rtdesk-ft';
 
 function q<T extends Element>(scope: ParentNode, sel: string): T {
   const el = scope.querySelector<T>(sel);
@@ -152,6 +163,7 @@ export class FilePanel {
   private conflictOpen = false;
   private ops = new Map<number, { desc: string; refresh: boolean }>();
   private ticker: ReturnType<typeof setInterval> | undefined;
+  private dragFrom: Side | null = null;
   private beforeUnload = (): void => this.post({ c: 'disconnect' });
 
   // remote pane
@@ -176,9 +188,9 @@ export class FilePanel {
     this.render();
     this.ticker = setInterval(() => this.tickJobs(), 500);
     window.addEventListener('beforeunload', this.beforeUnload);
-    this.log('File transfer panel ready.');
+    this.log('Fenêtre de transfert prête.');
     if (!this.fsMode) {
-      this.log('This browser lacks the File System Access API — uploads use staged files, downloads go to the Downloads folder.');
+      this.log('Ce navigateur ne peut pas ouvrir de dossier : les fichiers à envoyer sont ajoutés un par un, les fichiers reçus vont dans Téléchargements.');
     }
   }
 
@@ -194,6 +206,9 @@ export class FilePanel {
   open(): void {
     this.el.panel.classList.remove('rd-ft-closed');
     this.connectIfNeeded();
+    // Focus inside the window: keys typed here never reach the remote desktop.
+    this.el.remoteBody.focus({ preventScroll: true });
+    this.opts.onToggle?.(true);
   }
 
   close(): void {
@@ -201,6 +216,7 @@ export class FilePanel {
     // peer's TestDelay keepalive) so reopening is instant and running
     // transfers continue in the background.
     this.el.panel.classList.add('rd-ft-closed');
+    this.opts.onToggle?.(false);
   }
 
   destroy(): void {
@@ -217,7 +233,7 @@ export class FilePanel {
     if (this.worker && this.state !== 'error' && this.state !== 'closed') return;
     const config = this.opts.getConfig();
     if (!config) {
-      this.setStatus('error', 'Desktop session is not connected');
+      this.setStatus('error', 'La session n’est pas connectée');
       return;
     }
     this.peerLabel = config.peerId;
@@ -227,11 +243,11 @@ export class FilePanel {
     worker.onmessage = (e: MessageEvent) => this.onEvent(e.data as SessionEvent);
     worker.onerror = (e: ErrorEvent) => {
       this.state = 'error';
-      this.setStatus('error', e.message || 'session worker failed');
+      this.setStatus('error', e.message || 'Le canal de fichiers s’est arrêté');
     };
     this.post({ c: 'connectFile', config });
     this.state = 'connecting';
-    this.setStatus('busy', 'Opening file channel…');
+    this.setStatus('busy', 'Ouverture du canal de fichiers…');
   }
 
   private teardown(): void {
@@ -241,7 +257,7 @@ export class FilePanel {
     for (const job of this.jobs) {
       if (job.status === 'running' || job.status === 'starting') {
         job.status = 'error';
-        job.error = 'connection closed';
+        job.error = 'connexion fermée';
         job.confirmWaiter?.('cancelled');
         job.sentWaiter?.(0);
         void this.closeJobFile(job, false);
@@ -259,85 +275,82 @@ export class FilePanel {
   // --- DOM -------------------------------------------------------------------
 
   private render(): void {
-    const pane = (side: 'local' | 'remote', title: string, headBtns: string, pathBtns: string): string => `
-      <section class="rd-ft-pane" id="rd-ft-${side}">
-        <header class="rd-ft-pane-head">
-          <span class="rd-ft-pane-ic">${iconHtml(side === 'local' ? 'monitor' : 'folderTransfer')}</span>
-          <div class="rd-ft-pane-title">
-            <strong>${title}</strong>
-            <small id="rd-ft-${side}-sub"></small>
-          </div>
-          <div class="rd-ft-pane-actions">${headBtns}</div>
-        </header>
-        <div class="rd-ft-pathrow">
-          ${pathBtns}
-          <input id="rd-ft-${side}-path" class="rd-ft-path" type="text" spellcheck="false" autocomplete="off"
-                 placeholder="${side === 'remote' ? 'Remote path' : ''}" ${side === 'local' ? 'readonly' : ''}>
-          <button type="button" class="rd-btn" id="rd-ft-${side}-refresh" title="Refresh">${iconHtml('refresh')}</button>
-        </div>
-        <div class="rd-ft-listwrap">
-          <table class="rd-ft-table">
-            <thead><tr><th>Name</th><th class="rd-ft-col-size">Size</th><th class="rd-ft-col-mod">Modified</th></tr></thead>
-            <tbody id="rd-ft-${side}-body"></tbody>
-          </table>
-          <div class="rd-ft-empty" id="rd-ft-${side}-empty" hidden></div>
-        </div>
-        <footer class="rd-ft-foot" id="rd-ft-${side}-foot"></footer>
-      </section>`;
+    ensureFtSprite();
+    const ib = (id: string, icon: IconName, title: string, label = ''): string =>
+      `<button type="button" class="ftx-ib${label ? ' ftx-ib-label' : ''}" id="${id}" title="${title}" aria-label="${title}">` +
+      `${iconHtml(icon)}${label ? `<span>${label}</span>` : ''}</button>`;
 
-    const sBtn = (id: string, icon: string, title: string): string =>
-      `<button type="button" class="rd-btn" id="${id}" title="${title}">${icon}</button>`;
+    const pane = (side: Side): string => {
+      const local = side === 'local';
+      const actions = local
+        ? (this.fsMode
+            ? ib('rd-ft-local-open', 'folderOpen', 'Ouvrir un dossier de cet ordinateur', 'Ouvrir un dossier')
+            : ib('rd-ft-local-add', 'folderOpen', 'Ajouter des fichiers à envoyer', 'Ajouter des fichiers')) +
+          ib('rd-ft-local-send', 'fileUpload', 'Choisir des fichiers et les envoyer tout de suite', 'Envoyer des fichiers…')
+        : ib('rd-ft-remote-new', 'newFolder', 'Nouveau dossier') +
+          ib('rd-ft-remote-rename', 'rename', 'Renommer (F2)') +
+          ib('rd-ft-remote-del', 'trash', 'Supprimer (Suppr)');
+      return `
+      <section class="ftx-pane" id="rd-ft-${side}" data-side="${side}">
+        <header class="ftx-pane-head">
+          ${ftIcon(local ? 'computer' : 'remote', 'ftx-pane-ic')}
+          <div class="ftx-pane-title"><b>${local ? 'Cet ordinateur' : 'Poste distant'}</b><small id="rd-ft-${side}-sub"></small></div>
+          <div class="ftx-pane-actions">${actions}</div>
+        </header>
+        <div class="ftx-nav">
+          ${ib(`rd-ft-${side}-up`, 'arrowUp', 'Dossier parent (Retour arrière)')}
+          ${local ? '' : ib('rd-ft-remote-home', 'home', 'Dossier personnel')}
+          <nav class="ftx-crumbs" id="rd-ft-${side}-crumbs" aria-label="Emplacement"></nav>
+          ${local ? '' : '<input id="rd-ft-remote-path" class="ftx-path" type="text" spellcheck="false" autocomplete="off" placeholder="Chemin du dossier, puis Entrée" hidden>' + ib('rd-ft-remote-edit', 'keyboard', 'Saisir un chemin')}
+          ${ib(`rd-ft-${side}-refresh`, 'refresh', 'Actualiser')}
+        </div>
+        <div class="ftx-cols" aria-hidden="true"><span>Nom</span><span class="ftx-mod">Modifié le</span><span class="ftx-size">Taille</span><span class="ftx-kind">Type</span></div>
+        <div class="ftx-listwrap">
+          <div class="ftx-list" id="rd-ft-${side}-body" tabindex="0" role="listbox" aria-multiselectable="true"
+               aria-label="${local ? 'Fichiers de cet ordinateur' : 'Fichiers du poste distant'}"></div>
+          <div class="ftx-empty" id="rd-ft-${side}-empty" hidden></div>
+        </div>
+        <footer class="ftx-foot" id="rd-ft-${side}-foot"></footer>
+      </section>`;
+    };
 
     const panel = document.createElement('div');
     panel.id = 'rd-ft-overlay';
     panel.className = 'rd-ft-closed';
     panel.innerHTML = `
-      <header class="rd-ft-head">
-        <span class="rd-ft-title">${iconHtml('folderTransfer')}<span>File Transfer</span></span>
-        <span class="rd-ft-status" id="rd-ft-status"></span>
-        <span class="rd-ft-head-spacer"></span>
-        ${sBtn('rd-ft-hidden', iconHtml('eyeOff'), 'Show hidden files')}
-        ${sBtn('rd-ft-close', iconHtml('close'), 'Close file transfer')}
-      </header>
-      <div class="rd-ft-panes">
-        ${pane(
-          'local',
-          'This computer',
-          sBtn('rd-ft-local-send', iconHtml('fileUpload'), 'Send files… (pick files from anywhere)') +
-            (this.fsMode
-              ? sBtn('rd-ft-local-open', iconHtml('folderOpen'), 'Open a local folder')
-              : sBtn('rd-ft-local-add', iconHtml('folderOpen'), 'Add files to stage')),
-          sBtn('rd-ft-local-up', iconHtml('arrowUp'), 'Up one level'),
-        )}
-        <div class="rd-ft-mid">
-          <button type="button" class="rd-ft-go" id="rd-ft-send" title="Send selected to the remote computer" disabled>
-            <span>Send</span>${iconHtml('sendRight')}
-          </button>
-          <button type="button" class="rd-ft-go rd-ft-go-recv" id="rd-ft-recv" title="Receive selected from the remote computer" disabled>
-            ${iconHtml('sendLeft')}<span>Receive</span>
-          </button>
+      <div class="ftx-backdrop" id="rd-ft-backdrop"></div>
+      <div class="ftx-win" role="dialog" aria-modal="true" aria-labelledby="rd-ft-title">
+        <header class="ftx-head">
+          <span class="ftx-title" id="rd-ft-title">${iconHtml('folderTransfer')}<b>Transfert de fichiers</b></span>
+          <span class="ftx-status" id="rd-ft-status"></span>
+          <span class="ftx-spacer"></span>
+          ${ib('rd-ft-hidden', 'eyeOff', 'Afficher les fichiers cachés', 'Fichiers cachés')}
+          ${ib('rd-ft-close', 'close', 'Fermer (Échap)')}
+        </header>
+        <div class="ftx-panes">
+          ${pane('local')}
+          <div class="ftx-mid">
+            <button type="button" class="ftx-go" id="rd-ft-send" disabled title="Envoyer la sélection vers le poste distant">
+              <span class="ftx-go-ic">${iconHtml('sendRight')}</span><b>Envoyer</b><small>vers le poste distant</small>
+            </button>
+            <button type="button" class="ftx-go ftx-go-recv" id="rd-ft-recv" disabled title="Recevoir la sélection sur cet ordinateur">
+              <span class="ftx-go-ic">${iconHtml('sendLeft')}</span><b>Recevoir</b><small>sur cet ordinateur</small>
+            </button>
+          </div>
+          ${pane('remote')}
         </div>
-        ${pane(
-          'remote',
-          'Remote computer',
-          [
-            sBtn('rd-ft-remote-new', iconHtml('newFolder'), 'New folder'),
-            sBtn('rd-ft-remote-rename', iconHtml('rename'), 'Rename selected'),
-            sBtn('rd-ft-remote-del', iconHtml('trash'), 'Delete selected'),
-          ].join(''),
-          sBtn('rd-ft-remote-up', iconHtml('arrowUp'), 'Up one level') +
-            sBtn('rd-ft-remote-home', iconHtml('home'), 'Home directory'),
-        )}
-      </div>
-      <div class="rd-ft-bottom">
-        <div class="rd-ft-tabs">
-          <button type="button" class="rd-ft-tab rd-active" id="rd-ft-tab-jobs">Transfers</button>
-          <button type="button" class="rd-ft-tab" id="rd-ft-tab-log">Event log</button>
-        </div>
-        <div class="rd-ft-jobs" id="rd-ft-jobs"><div class="rd-ft-none">No transfers yet.</div></div>
-        <div class="rd-ft-log" id="rd-ft-log" hidden></div>
-      </div>
-      <div id="rd-ft-dialog" hidden></div>`;
+        <section class="ftx-queue" aria-label="Transferts">
+          <header class="ftx-queue-head">
+            <b>Transferts</b><span class="ftx-queue-sum" id="rd-ft-queue-sum"></span>
+            <span class="ftx-spacer"></span>
+            <button type="button" class="ftx-link" id="rd-ft-clear" hidden>Effacer les terminés</button>
+            <button type="button" class="ftx-link" id="rd-ft-tab-log" aria-expanded="false">Journal</button>
+          </header>
+          <div class="ftx-jobs" id="rd-ft-jobs"></div>
+          <div class="ftx-log" id="rd-ft-log" hidden></div>
+        </section>
+        <div class="ftx-dialog" id="rd-ft-dialog" hidden></div>
+      </div>`;
     this.opts.viewport.appendChild(panel);
 
     const m = panel;
@@ -346,31 +359,39 @@ export class FilePanel {
       status: q(m, '#rd-ft-status'),
       btnHidden: q(m, '#rd-ft-hidden'),
       localSub: q(m, '#rd-ft-local-sub'),
-      localPath: q(m, '#rd-ft-local-path'),
+      localCrumbs: q(m, '#rd-ft-local-crumbs'),
       localBody: q(m, '#rd-ft-local-body'),
       localFoot: q(m, '#rd-ft-local-foot'),
       localEmpty: q(m, '#rd-ft-local-empty'),
       remoteSub: q(m, '#rd-ft-remote-sub'),
+      remoteCrumbs: q(m, '#rd-ft-remote-crumbs'),
       remotePath: q(m, '#rd-ft-remote-path'),
       remoteBody: q(m, '#rd-ft-remote-body'),
       remoteFoot: q(m, '#rd-ft-remote-foot'),
       remoteEmpty: q(m, '#rd-ft-remote-empty'),
       btnSend: q(m, '#rd-ft-send'),
       btnRecv: q(m, '#rd-ft-recv'),
-      tabJobs: q(m, '#rd-ft-tab-jobs'),
-      tabLog: q(m, '#rd-ft-tab-log'),
+      btnLog: q(m, '#rd-ft-tab-log'),
+      btnClear: q(m, '#rd-ft-clear'),
+      queueSum: q(m, '#rd-ft-queue-sum'),
       jobsWrap: q(m, '#rd-ft-jobs'),
       logWrap: q(m, '#rd-ft-log'),
       dialog: q(m, '#rd-ft-dialog'),
     };
 
-    this.el.localSub.textContent = this.fsMode ? 'browser · no folder opened' : 'browser · staged files';
-
     q<HTMLButtonElement>(m, '#rd-ft-close').addEventListener('click', () => this.close());
+    q<HTMLElement>(m, '#rd-ft-backdrop').addEventListener('click', () => this.close());
+    panel.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.el.dialog.hidden) {
+        e.preventDefault();
+        this.close();
+      }
+    });
     this.el.btnHidden.addEventListener('click', () => {
       this.showHidden = !this.showHidden;
-      this.el.btnHidden.innerHTML = iconHtml(this.showHidden ? 'eye' : 'eyeOff');
-      this.el.btnHidden.title = this.showHidden ? 'Hide hidden files' : 'Show hidden files';
+      this.el.btnHidden.classList.toggle('is-on', this.showHidden);
+      this.el.btnHidden.innerHTML = `${iconHtml(this.showHidden ? 'eye' : 'eyeOff')}<span>Fichiers cachés</span>`;
+      this.el.btnHidden.title = this.showHidden ? 'Masquer les fichiers cachés' : 'Afficher les fichiers cachés';
       this.readRemote(this.remotePathValue);
       void this.refreshLocal();
     });
@@ -389,92 +410,118 @@ export class FilePanel {
     q<HTMLButtonElement>(m, '#rd-ft-remote-new').addEventListener('click', () => this.newRemoteFolder());
     q<HTMLButtonElement>(m, '#rd-ft-remote-rename').addEventListener('click', () => this.renameRemote());
     q<HTMLButtonElement>(m, '#rd-ft-remote-del').addEventListener('click', () => this.deleteRemote());
-    this.el.remotePath.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') this.readRemote(this.el.remotePath.value.trim());
+    q<HTMLButtonElement>(m, '#rd-ft-remote-edit').addEventListener('click', () => {
+      const input = this.el.remotePath;
+      input.hidden = !input.hidden;
+      this.el.remoteCrumbs.hidden = !input.hidden;
+      if (!input.hidden) {
+        input.value = this.remotePathValue;
+        input.focus();
+        input.select();
+      }
     });
+    this.el.remotePath.addEventListener('keydown', (e) => {
+      e.stopPropagation(); // Escape here closes the field, not the window
+      if (e.key === 'Enter') this.readRemote(this.el.remotePath.value.trim());
+      if (e.key === 'Escape' || e.key === 'Enter') {
+        this.el.remotePath.hidden = true;
+        this.el.remoteCrumbs.hidden = false;
+      }
+    });
+    for (const [crumbs, go] of [
+      [this.el.remoteCrumbs, (path: string) => this.readRemote(path)],
+      [this.el.localCrumbs, (depth: string) => void this.localJump(Number(depth))],
+    ] as Array<[HTMLElement, (v: string) => void]>) {
+      crumbs.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-go]');
+        if (b && !b.hasAttribute('aria-current')) go(b.dataset.go!);
+      });
+    }
 
     this.el.btnSend.addEventListener('click', () => void this.startUpload());
     this.el.btnRecv.addEventListener('click', () => this.startDownloads());
+    this.el.btnClear.addEventListener('click', () => {
+      this.jobs = this.jobs.filter((j) => j.status === 'running' || j.status === 'starting');
+      this.renderJobs();
+    });
+    this.el.btnLog.addEventListener('click', () => {
+      const show = this.el.logWrap.hidden;
+      this.el.logWrap.hidden = !show;
+      this.el.jobsWrap.hidden = show;
+      this.el.btnLog.textContent = show ? 'Transferts' : 'Journal';
+      this.el.btnLog.setAttribute('aria-expanded', String(show));
+    });
+    this.el.jobsWrap.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-job]');
+      const job = b ? this.jobById(Number(b.dataset.job)) : undefined;
+      if (job) this.cancelJob(job);
+    });
 
     this.wireList(this.el.localBody, 'local');
     this.wireList(this.el.remoteBody, 'remote');
 
-    const setTab = (tab: 'jobs' | 'log'): void => {
-      this.el.tabJobs.classList.toggle('rd-active', tab === 'jobs');
-      this.el.tabLog.classList.toggle('rd-active', tab === 'log');
-      this.el.jobsWrap.hidden = tab !== 'jobs';
-      this.el.logWrap.hidden = tab !== 'log';
-    };
-    this.el.tabJobs.addEventListener('click', () => setTab('jobs'));
-    this.el.tabLog.addEventListener('click', () => setTab('log'));
-
-    // drag & drop upload (files only) onto the remote pane; onto the local pane
-    // in fallback mode it stages them.
+    // Drops: files from the computer onto the remote pane upload; onto the local
+    // pane (no folder access) they are staged. Rows dragged from one pane onto
+    // the other send or receive the selection, like dragging between two windows.
     const remotePane = q<HTMLElement>(m, '#rd-ft-remote');
     const localPane = q<HTMLElement>(m, '#rd-ft-local');
-    for (const [paneEl, handler] of [
-      [remotePane, (files: File[]) => void this.uploadFiles(files.map((f) => ({ rel: f.name, file: f })))],
-      [localPane, (files: File[]) => this.stageFiles(files)],
-    ] as Array<[HTMLElement, (files: File[]) => void]>) {
+    for (const [paneEl, side] of [[remotePane, 'remote'], [localPane, 'local']] as Array<[HTMLElement, Side]>) {
       paneEl.addEventListener('dragover', (e) => {
+        const types = e.dataTransfer?.types ?? [];
+        const fromOther = types.includes(DRAG_TYPE) && this.dragFrom !== side;
+        if (!fromOther && !types.includes('Files')) return;
         e.preventDefault();
-        paneEl.classList.add('rd-ft-drop');
+        paneEl.classList.add('is-drop');
       });
-      paneEl.addEventListener('dragleave', () => paneEl.classList.remove('rd-ft-drop'));
+      paneEl.addEventListener('dragleave', (e) => {
+        if (!paneEl.contains(e.relatedTarget as Node | null)) paneEl.classList.remove('is-drop');
+      });
       paneEl.addEventListener('drop', (e) => {
         e.preventDefault();
-        paneEl.classList.remove('rd-ft-drop');
+        paneEl.classList.remove('is-drop');
+        const from = e.dataTransfer?.getData(DRAG_TYPE);
+        if (from && from !== side) {
+          if (side === 'remote') void this.startUpload();
+          else this.startDownloads();
+          return;
+        }
         const files = Array.from(e.dataTransfer?.files ?? []);
-        if (files.length) handler(files);
+        if (!files.length) return;
+        if (side === 'remote') void this.uploadFiles(files.map((f) => ({ rel: f.name, file: f })));
+        else this.stageFiles(files);
       });
     }
 
     this.updateLocalEmpty();
     this.renderLocal();
     this.renderRemote();
+    this.renderJobs();
     this.updateButtons();
   }
 
   private setStatus(kind: 'busy' | 'ok' | 'error', text: string): void {
     const s = this.el.status;
-    s.className = `rd-ft-status rd-ft-status-${kind}`;
+    s.className = `ftx-status is-${kind}`;
     s.innerHTML =
-      (kind === 'busy' ? '<span class="rd-spinner" aria-hidden="true"></span>' : '') +
+      (kind === 'busy' ? '<span class="rd-spinner" aria-hidden="true"></span>' : '<i aria-hidden="true"></i>') +
       `<span>${escapeHtml(text)}</span>` +
-      (kind === 'error' ? '<button type="button" class="rd-ft-retry" id="rd-ft-retry">Retry</button>' : '');
+      (kind === 'error' ? '<button type="button" class="ftx-link" id="rd-ft-retry">Réessayer</button>' : '');
     s.querySelector('#rd-ft-retry')?.addEventListener('click', () => this.connectIfNeeded());
   }
 
-  private wireList(tbody: HTMLElement, side: 'local' | 'remote'): void {
-    tbody.addEventListener('click', (e) => {
-      const tr = (e.target as HTMLElement).closest('tr[data-idx]');
-      if (!tr) return;
-      const idx = Number(tr.getAttribute('data-idx'));
-      const sel = side === 'local' ? this.localSel : this.remoteSel;
-      const anchor = side === 'local' ? this.localAnchor : this.remoteAnchor;
-      if (e.shiftKey && anchor >= 0) {
-        sel.clear();
-        const [a, b] = [Math.min(anchor, idx), Math.max(anchor, idx)];
-        for (let i = a; i <= b; i++) sel.add(i);
-      } else if (e.metaKey || e.ctrlKey) {
-        if (sel.has(idx)) sel.delete(idx);
-        else sel.add(idx);
-        if (side === 'local') this.localAnchor = idx;
-        else this.remoteAnchor = idx;
-      } else {
-        sel.clear();
-        sel.add(idx);
-        if (side === 'local') this.localAnchor = idx;
-        else this.remoteAnchor = idx;
-      }
-      if (side === 'local') this.renderLocal();
-      else this.renderRemote();
-      this.updateButtons();
-    });
-    tbody.addEventListener('dblclick', (e) => {
-      const tr = (e.target as HTMLElement).closest('tr[data-idx]');
-      if (!tr) return;
-      const idx = Number(tr.getAttribute('data-idx'));
+  private wireList(list: HTMLElement, side: Side): void {
+    const sel = (): Set<number> => (side === 'local' ? this.localSel : this.remoteSel);
+    const count = (): number => (side === 'local' ? this.localEntries.length : this.remoteEntries.length);
+    const setAnchor = (i: number): void => {
+      if (side === 'local') this.localAnchor = i;
+      else this.remoteAnchor = i;
+    };
+    const anchor = (): number => (side === 'local' ? this.localAnchor : this.remoteAnchor);
+    const rowIdx = (t: EventTarget | null): number => {
+      const row = (t as HTMLElement | null)?.closest<HTMLElement>('.ftx-row');
+      return row ? Number(row.dataset.idx) : -1;
+    };
+    const open = (idx: number): void => {
       if (side === 'remote') {
         const entry = this.remoteEntries[idx];
         if (!entry) return;
@@ -482,10 +529,177 @@ export class FilePanel {
         else void this.startDownloadOf([entry]);
       } else {
         const entry = this.localEntries[idx];
-        if (!entry) return;
-        if (entry.kind === 'dir' && this.fsMode) void this.localEnter(entry);
+        if (entry?.kind === 'dir' && this.fsMode) void this.localEnter(entry);
+      }
+    };
+
+    list.addEventListener('click', (e) => {
+      const idx = rowIdx(e.target);
+      const s = sel();
+      if (idx < 0) {
+        // A click on the empty area clears the selection, as in Finder.
+        if (!e.shiftKey && !e.metaKey && !e.ctrlKey && s.size) {
+          s.clear();
+          this.paintSelection(side);
+        }
+        return;
+      }
+      if (e.shiftKey && anchor() >= 0) {
+        s.clear();
+        const [a, b] = [Math.min(anchor(), idx), Math.max(anchor(), idx)];
+        for (let i = a; i <= b; i++) s.add(i);
+      } else if (e.metaKey || e.ctrlKey) {
+        if (s.has(idx)) s.delete(idx);
+        else s.add(idx);
+        setAnchor(idx);
+      } else {
+        s.clear();
+        s.add(idx);
+        setAnchor(idx);
+      }
+      this.paintSelection(side);
+    });
+    list.addEventListener('dblclick', (e) => {
+      const idx = rowIdx(e.target);
+      if (idx >= 0) open(idx);
+    });
+    list.addEventListener('keydown', (e) => {
+      const s = sel();
+      const n = count();
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && n > 0) {
+        e.preventDefault();
+        const cur = anchor() >= 0 ? anchor() : -1;
+        const next = Math.max(0, Math.min(n - 1, cur + (e.key === 'ArrowDown' ? 1 : -1)));
+        if (!e.shiftKey) s.clear();
+        s.add(next);
+        setAnchor(next);
+        this.paintSelection(side);
+        list.querySelector<HTMLElement>(`.ftx-row[data-idx="${next}"]`)?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter' && s.size === 1) {
+        e.preventDefault();
+        open([...s][0]!);
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        if (side === 'remote') this.remoteUp();
+        else void this.localUp();
+      } else if ((e.key === 'a' || e.key === 'A') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        for (let i = 0; i < n; i++) s.add(i);
+        this.paintSelection(side);
+      } else if (side === 'remote' && e.key === 'Delete') {
+        e.preventDefault();
+        this.deleteRemote();
+      } else if (side === 'remote' && e.key === 'F2') {
+        e.preventDefault();
+        this.renameRemote();
       }
     });
+    list.addEventListener('dragstart', (e) => {
+      const idx = rowIdx(e.target);
+      if (idx < 0 || !e.dataTransfer) return;
+      const s = sel();
+      if (!s.has(idx)) {
+        s.clear();
+        s.add(idx);
+        setAnchor(idx);
+        this.paintSelection(side);
+      }
+      this.dragFrom = side;
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData(DRAG_TYPE, side);
+    });
+    list.addEventListener('dragend', () => {
+      this.dragFrom = null;
+    });
+  }
+
+  /** Selection change: toggles the affected rows only, never rebuilds the list. */
+  private paintSelection(side: Side): void {
+    const list = side === 'local' ? this.el.localBody : this.el.remoteBody;
+    const sel = side === 'local' ? this.localSel : this.remoteSel;
+    for (const row of Array.from(list.children) as HTMLElement[]) {
+      const on = sel.has(Number(row.dataset.idx));
+      if (row.classList.contains('is-sel') !== on) {
+        row.classList.toggle('is-sel', on);
+        row.setAttribute('aria-selected', String(on));
+      }
+    }
+    this.renderFoot(side);
+    this.updateButtons();
+  }
+
+  private renderFoot(side: Side): void {
+    const entries: Array<{ size: number; kind: string }> = side === 'local' ? this.localEntries : this.remoteEntries;
+    const sel = side === 'local' ? this.localSel : this.remoteSel;
+    const foot = side === 'local' ? this.el.localFoot : this.el.remoteFoot;
+    if (!entries.length) {
+      foot.textContent = '';
+      return;
+    }
+    const total = `${entries.length} élément${entries.length > 1 ? 's' : ''}`;
+    if (!sel.size) {
+      foot.textContent = total;
+      return;
+    }
+    const bytes = [...sel].reduce((s, i) => s + (entries[i]?.size ?? 0), 0);
+    foot.textContent = `${sel.size} sélectionné${sel.size > 1 ? 's' : ''} sur ${total}` + (bytes > 0 ? ` · ${ftSize(bytes)}` : '');
+  }
+
+  private rowHtml(i: number, name: string, kind: 'dir' | 'drive' | 'file', size: number, modMs: number, sel: boolean, hidden: boolean): string {
+    const k = ftKind(name, kind);
+    const safe = escapeHtml(name);
+    return (
+      `<div class="ftx-row${sel ? ' is-sel' : ''}${hidden ? ' is-hidden' : ''}" data-idx="${i}" role="option" aria-selected="${sel}" draggable="true" title="${safe}">` +
+      `<span class="ftx-name">${ftIcon(k.icon)}<span class="ftx-label">${safe}</span></span>` +
+      `<span class="ftx-mod">${ftDate(modMs)}</span>` +
+      `<span class="ftx-size">${kind === 'file' ? ftSize(size) : '—'}</span>` +
+      `<span class="ftx-kind">${k.label}</span></div>`
+    );
+  }
+
+  private renderRemoteCrumbs(): void {
+    const path = this.remotePathValue;
+    const parts: Array<{ label: string; go: string }> = [];
+    if (this.sep === '\\') {
+      parts.push({ label: 'Ce PC', go: '/' });
+      let acc = '';
+      for (const seg of path.split('\\').filter((x) => x && x !== '/')) {
+        acc = acc ? (acc.endsWith('\\') ? acc + seg : `${acc}\\${seg}`) : seg.endsWith(':') ? `${seg}\\` : seg;
+        parts.push({ label: seg, go: acc });
+      }
+    } else {
+      parts.push({ label: 'Racine', go: '/' });
+      let acc = '';
+      for (const seg of path.split('/').filter(Boolean)) {
+        acc += `/${seg}`;
+        parts.push({ label: seg, go: acc });
+      }
+    }
+    this.el.remoteCrumbs.innerHTML = this.crumbsHtml(path ? parts : []);
+  }
+
+  private renderLocalCrumbs(): void {
+    const parts = this.dirStack.map((d, i) => ({ label: d.name, go: String(i) }));
+    this.el.localCrumbs.innerHTML = parts.length
+      ? this.crumbsHtml(parts)
+      : `<span class="ftx-crumb-none">${this.fsMode ? 'Aucun dossier ouvert' : 'Fichiers à envoyer'}</span>`;
+  }
+
+  private crumbsHtml(parts: Array<{ label: string; go: string }>): string {
+    return parts
+      .map((p, i) => {
+        const last = i === parts.length - 1;
+        return `<button type="button" class="ftx-crumb" data-go="${escapeHtml(p.go)}"${last ? ' aria-current="location"' : ''}>${escapeHtml(p.label)}</button>`;
+      })
+      .join('<span class="ftx-crumb-sep" aria-hidden="true">›</span>');
+  }
+
+  private async localJump(depth: number): Promise<void> {
+    if (!this.fsMode || depth < 0 || depth >= this.dirStack.length - 1) return;
+    this.dirStack.length = depth + 1;
+    this.localSel.clear();
+    this.localAnchor = -1;
+    await this.refreshLocal();
   }
 
   // --- session events --------------------------------------------------------
@@ -496,25 +710,25 @@ export class FilePanel {
         this.state = ev.state;
         switch (ev.state) {
           case 'streaming':
-            this.setStatus('ok', `Connected · ${this.peerLabel}`);
-            this.log(`File channel to ${this.peerLabel} established.`);
+            this.setStatus('ok', `Connecté à ${this.peerLabel}`);
+            this.log(`Canal de fichiers ouvert avec ${this.peerLabel}.`);
             if (!this.remotePathValue) this.readRemote('');
             break;
           case 'error':
             this.teardown();
-            this.setStatus('error', ev.detail || 'Connection failed');
-            this.log(`File channel error: ${ev.detail || 'unknown'}`);
+            this.setStatus('error', ev.detail || 'La connexion a échoué');
+            this.log(`Erreur du canal de fichiers : ${ev.detail || 'inconnue'}`);
             break;
           case 'closed':
             this.teardown();
-            this.setStatus('error', 'File channel closed');
-            this.log('File channel closed.');
+            this.setStatus('error', 'Canal de fichiers fermé');
+            this.log('Canal de fichiers fermé.');
             break;
           case 'needAccept':
-            this.setStatus('busy', 'Waiting for the remote user to accept…');
+            this.setStatus('busy', 'En attente de l’accord du poste distant…');
             break;
           default:
-            this.setStatus('busy', 'Opening file channel…');
+            this.setStatus('busy', 'Ouverture du canal de fichiers…');
         }
         this.updateButtons();
         this.renderRemote();
@@ -527,8 +741,8 @@ export class FilePanel {
         // surface it honestly if the peer rejects the file channel.
         this.teardown();
         this.state = 'error';
-        this.setStatus('error', ev.message || 'File channel login failed');
-        this.log(`File channel login failed: ${ev.message}`);
+        this.setStatus('error', ev.message || 'Le poste distant a refusé le canal de fichiers');
+        this.log(`Connexion du canal de fichiers refusée : ${ev.message}`);
         this.updateButtons();
         break;
       case 'msgbox': {
@@ -601,6 +815,8 @@ export class FilePanel {
     }
     this.remotePathValue = dir.path;
     this.el.remotePath.value = dir.path;
+    this.el.remotePath.hidden = true;
+    this.renderRemoteCrumbs();
     const entries = dir.entries.filter((e) => this.showHidden || !e.isHidden);
     entries.sort((a, b) => {
       const da = isDirKind(a.kind) ? 0 : 1;
@@ -616,20 +832,26 @@ export class FilePanel {
   }
 
   private renderRemote(): void {
-    const rows = this.remoteEntries.map((e, i) => {
-      const icon = isDirKind(e.kind) ? (e.kind === 'drive' ? 'drive' : 'folder') : 'file';
-      const size = isDirKind(e.kind) ? '—' : formatBytes(e.size);
-      const mod = e.modifiedSec ? new Date(e.modifiedSec * 1000).toLocaleString() : '—';
-      return `<tr data-idx="${i}" class="${this.remoteSel.has(i) ? 'rd-sel' : ''}${e.isHidden ? ' rd-hiddenfile' : ''}">
-        <td><span class="rd-ft-ic">${iconHtml(icon)}</span>${escapeHtml(e.name)}</td>
-        <td class="rd-ft-col-size">${size}</td><td class="rd-ft-col-mod">${mod}</td></tr>`;
-    });
-    this.el.remoteBody.innerHTML = rows.join('');
-    this.el.remoteEmpty.hidden = this.remoteEntries.length > 0;
-    this.el.remoteEmpty.textContent = this.state === 'streaming' ? 'Empty folder' : 'Not connected';
-    const selSize = [...this.remoteSel].reduce((s, i) => s + (this.remoteEntries[i]?.size ?? 0), 0);
-    this.el.remoteFoot.textContent = `${this.remoteSel.size} of ${this.remoteEntries.length} selected` +
-      (selSize > 0 ? ` · ${formatBytes(selSize)}` : '');
+    this.el.remoteBody.innerHTML = this.remoteEntries
+      .map((e, i) =>
+        this.rowHtml(
+          i,
+          e.name,
+          isDirKind(e.kind) ? (e.kind === 'drive' ? 'drive' : 'dir') : 'file',
+          e.size,
+          e.modifiedSec * 1000,
+          this.remoteSel.has(i),
+          e.isHidden,
+        ),
+      )
+      .join('');
+    const empty = this.el.remoteEmpty;
+    empty.hidden = this.remoteEntries.length > 0;
+    empty.innerHTML =
+      this.state === 'streaming'
+        ? `${ftIcon('folder', 'ftx-empty-ic')}<p>Ce dossier est vide</p>`
+        : `<p>${this.state === 'error' || this.state === 'closed' ? 'Non connecté' : 'Connexion au poste distant…'}</p>`;
+    this.renderFoot('remote');
   }
 
   // --- remote ops ------------------------------------------------------------
@@ -642,9 +864,9 @@ export class FilePanel {
 
   private newRemoteFolder(): void {
     if (this.state !== 'streaming') return;
-    this.promptDialog('New folder', 'Folder name', '', (name) => {
+    this.promptDialog('Nouveau dossier', 'Nom du dossier', '', (name) => {
       if (!name) return;
-      const id = this.op(`Create folder "${name}"`, true);
+      const id = this.op(`Création du dossier « ${name} »`, true);
       this.post({ c: 'ftCreateDir', id, path: joinRemote(this.remotePathValue, name, this.sep) });
     });
   }
@@ -653,9 +875,9 @@ export class FilePanel {
     const idx = [...this.remoteSel][0];
     const entry = idx !== undefined ? this.remoteEntries[idx] : undefined;
     if (!entry || this.state !== 'streaming') return;
-    this.promptDialog(`Rename "${entry.name}"`, 'New name', entry.name, (name) => {
+    this.promptDialog(`Renommer « ${entry.name} »`, 'Nouveau nom', entry.name, (name) => {
       if (!name || name === entry.name) return;
-      const id = this.op(`Rename "${entry.name}" to "${name}"`, true);
+      const id = this.op(`Renommage de « ${entry.name} » en « ${name} »`, true);
       this.post({ c: 'ftRename', id, path: joinRemote(this.remotePathValue, entry.name, this.sep), newName: name });
     });
   }
@@ -663,11 +885,11 @@ export class FilePanel {
   private deleteRemote(): void {
     const entries = [...this.remoteSel].map((i) => this.remoteEntries[i]).filter((e): e is FtEntry => !!e);
     if (!entries.length || this.state !== 'streaming') return;
-    const what = entries.length === 1 ? `"${entries[0]!.name}"` : `${entries.length} items`;
-    this.confirmDialog(`Delete ${what} from the remote computer? This cannot be undone.`, () => {
+    const what = entries.length === 1 ? `« ${entries[0]!.name} »` : `ces ${entries.length} éléments`;
+    this.confirmDialog(`Supprimer ${what} du poste distant ? Cette action est définitive.`, () => {
       for (const e of entries) {
         const path = joinRemote(this.remotePathValue, e.name, this.sep);
-        const id = this.op(`Delete "${e.name}"`, true);
+        const id = this.op(`Suppression de « ${e.name} »`, true);
         if (isDirKind(e.kind)) this.post({ c: 'ftRemoveDir', id, path });
         else this.post({ c: 'ftRemoveFile', id, path, fileNum: 0 });
       }
@@ -762,7 +984,7 @@ export class FilePanel {
         }),
       );
     } catch (e) {
-      this.opts.toast(`Could not read folder: ${(e as Error).message}`);
+      this.opts.toast(`Impossible de lire ce dossier : ${(e as Error).message}`);
     }
     if (gen !== this.localListGen) return; // superseded by a newer navigation
     const cmp = (a: LocalEntry, b: LocalEntry): number =>
@@ -770,8 +992,8 @@ export class FilePanel {
     dirs.sort(cmp);
     files.sort(cmp);
     this.localEntries = [...dirs, ...files];
-    this.el.localPath.value = this.dirStack.map((d) => d.name).join('/');
-    this.el.localSub.textContent = `browser · ${this.rootHandle?.name ?? ''}`;
+    this.renderLocalCrumbs();
+    this.el.localSub.textContent = this.rootHandle ? `Dossier ouvert : ${this.rootHandle.name}` : '';
     this.renderLocal();
     this.updateButtons();
   }
@@ -791,7 +1013,7 @@ export class FilePanel {
   // straight to the current remote folder.
   private pickAndSendFiles(): void {
     if (this.state !== 'streaming') {
-      this.opts.toast('Not connected');
+      this.opts.toast('Pas encore connecté');
       return;
     }
     const input = document.createElement('input');
@@ -822,19 +1044,12 @@ export class FilePanel {
         file: f,
       }));
     }
-    const rows = this.localEntries.map((e, i) => {
-      const icon = e.kind === 'dir' ? 'folder' : 'file';
-      const size = e.kind === 'dir' ? '—' : formatBytes(e.size);
-      const mod = e.modifiedMs ? new Date(e.modifiedMs).toLocaleString() : '—';
-      return `<tr data-idx="${i}" class="${this.localSel.has(i) ? 'rd-sel' : ''}${e.name.startsWith('.') ? ' rd-hiddenfile' : ''}">
-        <td><span class="rd-ft-ic">${iconHtml(icon)}</span>${escapeHtml(e.name)}</td>
-        <td class="rd-ft-col-size">${size}</td><td class="rd-ft-col-mod">${mod}</td></tr>`;
-    });
-    this.el.localBody.innerHTML = rows.join('');
+    this.el.localBody.innerHTML = this.localEntries
+      .map((e, i) => this.rowHtml(i, e.name, e.kind, e.size, e.modifiedMs, this.localSel.has(i), e.name.startsWith('.')))
+      .join('');
+    this.renderLocalCrumbs();
     this.updateLocalEmpty();
-    const selSize = [...this.localSel].reduce((s, i) => s + (this.localEntries[i]?.size ?? 0), 0);
-    this.el.localFoot.textContent = `${this.localSel.size} of ${this.localEntries.length} selected` +
-      (selSize > 0 ? ` · ${formatBytes(selSize)}` : '');
+    this.renderFoot('local');
   }
 
   private updateLocalEmpty(): void {
@@ -844,19 +1059,26 @@ export class FilePanel {
       return;
     }
     empty.hidden = false;
-    if (this.fsMode) {
-      empty.innerHTML = this.rootHandle
-        ? 'Empty folder'
-        : `<div class="rd-ft-cta">${iconHtml('folderOpen')}<p>Open a local folder to browse it here — or use
-           <b>Send files…</b> above, or drag files onto the remote pane, to send from anywhere.</p>
-           <button type="button" class="rd-ft-cta-btn" id="rd-ft-cta-open">Open folder…</button></div>`;
-      empty.querySelector('#rd-ft-cta-open')?.addEventListener('click', () => void this.openLocalFolder());
-    } else {
-      empty.innerHTML = `<div class="rd-ft-cta">${iconHtml('folderOpen')}<p>Drop files here or add them to stage for sending.<br>
-        Received files are saved to your Downloads folder.</p>
-        <button type="button" class="rd-ft-cta-btn" id="rd-ft-cta-add">Add files…</button></div>`;
-      empty.querySelector('#rd-ft-cta-add')?.addEventListener('click', () => this.pickStagedFiles());
+    if (this.fsMode && this.rootHandle) {
+      empty.innerHTML = `${ftIcon('folder', 'ftx-empty-ic')}<p>Ce dossier est vide</p>`;
+      return;
     }
+    empty.innerHTML = this.fsMode
+      ? `<div class="ftx-cta">${ftIcon('folder', 'ftx-cta-ic')}
+           <b>Choisissez un dossier de cet ordinateur</b>
+           <p>Il s’affiche ici pour envoyer ses fichiers ou y recevoir ceux du poste distant.
+              Vous pouvez aussi glisser des fichiers sur le poste distant.</p>
+           <div class="ftx-cta-btns">
+             <button type="button" class="ftx-btn ftx-btn-primary" id="rd-ft-cta-open">Ouvrir un dossier…</button>
+             <button type="button" class="ftx-btn" id="rd-ft-cta-send">Envoyer des fichiers…</button>
+           </div></div>`
+      : `<div class="ftx-cta">${ftIcon('folder', 'ftx-cta-ic')}
+           <b>Ajoutez les fichiers à envoyer</b>
+           <p>Glissez-les ici ou choisissez-les. Les fichiers reçus vont dans votre dossier Téléchargements.</p>
+           <div class="ftx-cta-btns"><button type="button" class="ftx-btn ftx-btn-primary" id="rd-ft-cta-add">Ajouter des fichiers…</button></div></div>`;
+    empty.querySelector('#rd-ft-cta-open')?.addEventListener('click', () => void this.openLocalFolder());
+    empty.querySelector('#rd-ft-cta-send')?.addEventListener('click', () => this.pickAndSendFiles());
+    empty.querySelector('#rd-ft-cta-add')?.addEventListener('click', () => this.pickStagedFiles());
   }
 
   // --- transfers: download ---------------------------------------------------
@@ -871,10 +1093,10 @@ export class FilePanel {
     let destDir = this.fsMode ? this.localCwd() ?? null : null;
     if (destDir && !(await this.ensureWritable(destDir))) {
       destDir = null;
-      this.log('Chrome refused write access to this folder — received files will be saved to your Downloads folder instead.');
-      this.opts.toast('Saving to your Downloads folder (folder is read-only)');
+      this.log('Le navigateur refuse d’écrire dans ce dossier : les fichiers reçus vont dans Téléchargements.');
+      this.opts.toast('Enregistrement dans Téléchargements (dossier en lecture seule)');
     } else if (this.fsMode && !destDir) {
-      this.log('No local folder open — received files will be saved to your Downloads folder.');
+      this.log('Aucun dossier ouvert : les fichiers reçus vont dans Téléchargements.');
     }
     for (const entry of entries) {
       const id = this.nextId++;
@@ -905,9 +1127,9 @@ export class FilePanel {
         includeHidden: this.showHidden,
         fileNum: 0,
       });
-      this.log(`Receiving "${entry.name}"…`);
+      this.log(`Réception de « ${entry.name} »…`);
       if (!destDir && entry.size > MEM_DOWNLOAD_WARN) {
-        this.log(`Warning: "${entry.name}" is ${formatBytes(entry.size)} and will be buffered in memory before saving.`);
+        this.log(`Attention : « ${entry.name} » fait ${ftSize(entry.size)} et sera gardé en mémoire avant l’enregistrement.`);
       }
     }
     this.renderJobs();
@@ -942,7 +1164,7 @@ export class FilePanel {
       return;
     }
     this.post({ c: 'ftConfirm', id: job.id, fileNum: ev.fileNum, skip: decision === 'skip', offsetBlk: 0 });
-    if (decision === 'skip') this.log(`Skipped "${rel}" (already exists).`);
+    if (decision === 'skip') this.log(`« ${rel} » ignoré (existe déjà).`);
     this.renderJobs();
   }
 
@@ -984,9 +1206,9 @@ export class FilePanel {
         job.doneBytes += ev.data.length;
       } catch (e) {
         job.status = 'error';
-        job.error = `write failed: ${(e as Error).message}`;
+        job.error = `écriture impossible : ${(e as Error).message}`;
         this.post({ c: 'ftCancel', id: job.id });
-        this.log(`Receive failed for "${job.label}": ${job.error}`);
+        this.log(`Échec de la réception de « ${job.label} » : ${job.error}`);
         this.renderJobs();
       }
     });
@@ -1036,7 +1258,7 @@ export class FilePanel {
     const opInfo = this.ops.get(id);
     if (opInfo) {
       this.ops.delete(id);
-      this.log(`${opInfo.desc} — done.`);
+      this.log(`${opInfo.desc} : terminé.`);
       if (opInfo.refresh) this.readRemote(this.remotePathValue);
       return;
     }
@@ -1049,8 +1271,8 @@ export class FilePanel {
         if (job.status !== 'error' && job.status !== 'cancelled') {
           job.status = 'done';
           job.doneBytes = Math.max(job.doneBytes, job.totalSize);
-          this.log(`Received "${job.label}" (${formatBytes(job.doneBytes)}).`);
-          this.opts.toast(`Received ${job.label}`);
+          this.log(`« ${job.label} » reçu (${ftSize(job.doneBytes)}).`);
+          this.opts.toast(`${job.label} reçu`);
           if (this.fsMode) void this.refreshLocal();
         }
         this.renderJobs();
@@ -1060,8 +1282,8 @@ export class FilePanel {
       job.peerDone = true;
       if (job.status === 'running' || job.status === 'starting') {
         job.status = 'done';
-        this.log(`Sent "${job.label}" (${formatBytes(job.doneBytes)}).`);
-        this.opts.toast(`Sent ${job.label}`);
+        this.log(`« ${job.label} » envoyé (${ftSize(job.doneBytes)}).`);
+        this.opts.toast(`${job.label} envoyé`);
         this.readRemote(this.remotePathValue);
       }
       this.renderJobs();
@@ -1073,8 +1295,8 @@ export class FilePanel {
     const opInfo = this.ops.get(id);
     if (opInfo) {
       this.ops.delete(id);
-      this.log(`${opInfo.desc} — failed: ${error}`);
-      this.opts.toast(`${opInfo.desc} failed: ${error}`);
+      this.log(`${opInfo.desc} : échec (${error})`);
+      this.opts.toast(`${opInfo.desc} : échec (${error})`);
       if (opInfo.refresh) this.readRemote(this.remotePathValue);
       return;
     }
@@ -1091,7 +1313,7 @@ export class FilePanel {
     job.confirmWaiter?.('cancelled');
     job.sentWaiter?.(0);
     void this.closeJobFile(job, false);
-    this.log(`Transfer "${job.label}" failed${fileNum >= 0 ? ` (file ${fileNum + 1})` : ''}: ${error}`);
+    this.log(`Échec du transfert « ${job.label} »${fileNum >= 0 ? ` (fichier ${fileNum + 1})` : ''} : ${error}`);
     this.renderJobs();
   }
 
@@ -1121,7 +1343,7 @@ export class FilePanel {
         try {
           out.push({ rel: `${prefix}/${handle.name}`, file: await (handle as FileSystemFileHandle).getFile() });
         } catch {
-          this.log(`Skipping unreadable file "${prefix}/${handle.name}".`);
+          this.log(`Fichier illisible ignoré : « ${prefix}/${handle.name} ».`);
         }
       }
     }
@@ -1150,7 +1372,7 @@ export class FilePanel {
     };
     this.jobs.unshift(job);
     this.renderJobs();
-    this.log(`Sending ${label} to ${this.remotePathValue || 'home'}…`);
+    this.log(`Envoi de ${label} vers ${this.remotePathValue || 'le dossier personnel'}…`);
 
     this.post({
       c: 'ftReceive',
@@ -1188,7 +1410,7 @@ export class FilePanel {
         if (confirm === 'cancelled' || this.jobStopped(job)) return;
         if (confirm.skip) {
           job.doneBytes += file.size;
-          this.log(`Skipped "${rel}" (already exists on remote).`);
+          this.log(`« ${rel} » ignoré (existe déjà sur le poste distant).`);
           continue;
         }
         let offset = confirm.offsetBytes;
@@ -1220,7 +1442,7 @@ export class FilePanel {
         job.status = 'error';
         job.error = (e as Error).message;
         this.post({ c: 'ftError', id, fileNum: -1, error: job.error ?? 'read failed' });
-        this.log(`Send failed for "${job.label}": ${job.error}`);
+        this.log(`Échec de l’envoi de « ${job.label} » : ${job.error}`);
         this.renderJobs();
       }
     }
@@ -1264,14 +1486,14 @@ export class FilePanel {
     d.hidden = false;
     d.innerHTML = `
       <div class="rd-ft-dlg">
-        <h3>File already exists</h3>
+        <h3>Ce fichier existe déjà</h3>
         <p class="rd-ft-dlg-file">${iconHtml('file')}<span>${escapeHtml(next.name)}</span></p>
         <p class="rd-ft-dlg-detail">${escapeHtml(next.detail)}</p>
-        <label class="rd-save rd-ft-dlg-all"><input type="checkbox" id="rd-ft-dlg-applyall"><span>Apply to all files in this transfer</span></label>
+        <label class="rd-save rd-ft-dlg-all"><input type="checkbox" id="rd-ft-dlg-applyall"><span>Faire de même pour tous les fichiers de ce transfert</span></label>
         <div class="rd-ft-dlg-btns">
-          <button type="button" class="rd-ft-dlg-btn rd-ft-dlg-primary" data-act="overwrite">Overwrite</button>
-          <button type="button" class="rd-ft-dlg-btn" data-act="skip">Skip</button>
-          <button type="button" class="rd-ft-dlg-btn rd-ft-dlg-danger" data-act="cancel">Cancel transfer</button>
+          <button type="button" class="rd-ft-dlg-btn rd-ft-dlg-primary" data-act="overwrite">Remplacer</button>
+          <button type="button" class="rd-ft-dlg-btn" data-act="skip">Ignorer</button>
+          <button type="button" class="rd-ft-dlg-btn rd-ft-dlg-danger" data-act="cancel">Annuler le transfert</button>
         </div>
       </div>`;
     const finish = (action: ConflictDecision['action']): void => {
@@ -1298,8 +1520,8 @@ export class FilePanel {
         <input type="text" class="rd-ft-dlg-input" id="rd-ft-dlg-input" placeholder="${escapeHtml(placeholder)}"
                value="${escapeHtml(initial)}" spellcheck="false" autocomplete="off">
         <div class="rd-ft-dlg-btns">
-          <button type="button" class="rd-ft-dlg-btn rd-ft-dlg-primary" data-act="ok">OK</button>
-          <button type="button" class="rd-ft-dlg-btn" data-act="no">Cancel</button>
+          <button type="button" class="rd-ft-dlg-btn rd-ft-dlg-primary" data-act="ok">Valider</button>
+          <button type="button" class="rd-ft-dlg-btn" data-act="no">Annuler</button>
         </div>
       </div>`;
     const input = q<HTMLInputElement>(d, '#rd-ft-dlg-input');
@@ -1324,11 +1546,11 @@ export class FilePanel {
     d.hidden = false;
     d.innerHTML = `
       <div class="rd-ft-dlg">
-        <h3>Are you sure?</h3>
+        <h3>Confirmer la suppression</h3>
         <p class="rd-ft-dlg-detail">${escapeHtml(text)}</p>
         <div class="rd-ft-dlg-btns">
-          <button type="button" class="rd-ft-dlg-btn rd-ft-dlg-danger" data-act="ok">Delete</button>
-          <button type="button" class="rd-ft-dlg-btn" data-act="no">Cancel</button>
+          <button type="button" class="rd-ft-dlg-btn rd-ft-dlg-danger" data-act="ok">Supprimer</button>
+          <button type="button" class="rd-ft-dlg-btn" data-act="no">Annuler</button>
         </div>
       </div>`;
     const finish = (ok: boolean): void => {
@@ -1338,6 +1560,7 @@ export class FilePanel {
     };
     d.querySelector('[data-act="ok"]')!.addEventListener('click', () => finish(true));
     d.querySelector('[data-act="no"]')!.addEventListener('click', () => finish(false));
+    (d.querySelector('[data-act="no"]') as HTMLButtonElement).focus();
   }
 
   // --- job list / log --------------------------------------------------------
@@ -1353,7 +1576,7 @@ export class FilePanel {
     job.confirmWaiter?.('cancelled');
     job.sentWaiter?.(0);
     void this.closeJobFile(job, false);
-    this.log(`Cancelled "${job.label}".`);
+    this.log(`« ${job.label} » annulé.`);
     this.renderJobs();
   }
 
@@ -1376,48 +1599,46 @@ export class FilePanel {
 
   private renderJobs(): void {
     const wrap = this.el.jobsWrap;
+    const active = this.jobs.filter((j) => j.status === 'running' || j.status === 'starting').length;
+    this.el.btnClear.hidden = this.jobs.length === active;
+    this.el.queueSum.textContent = this.jobs.length ? (active ? `${active} en cours` : 'tous terminés') : '';
     if (!this.jobs.length) {
-      wrap.innerHTML = '<div class="rd-ft-none">No transfers yet.</div>';
+      wrap.innerHTML =
+        '<div class="ftx-none">Sélectionnez des fichiers puis cliquez sur <b>Envoyer</b> ou <b>Recevoir</b> — ou glissez-les d’un côté à l’autre.</div>';
       return;
     }
     wrap.innerHTML = this.jobs
       .map((j) => {
         const pct = j.totalSize > 0 ? Math.min(100, Math.round((j.doneBytes / j.totalSize) * 100)) : j.status === 'done' ? 100 : 0;
-        const dirIcon = j.kind === 'download' ? iconHtml('sendLeft') : iconHtml('sendRight');
-        const status =
-          j.status === 'running' || j.status === 'starting'
-            ? `${formatBytes(j.doneBytes)} of ${j.totalSize ? formatBytes(j.totalSize) : '?'}` +
-              (j.speedBps > 0 ? ` · ${formatBytes(j.speedBps)}/s` : '')
-            : j.status === 'done'
-              ? `Completed · ${formatBytes(Math.max(j.doneBytes, j.totalSize))}`
-              : j.status === 'cancelled'
-                ? 'Cancelled'
-                : `Failed: ${j.error ?? 'unknown error'}`;
-        const cancellable = j.status === 'running' || j.status === 'starting';
-        return `<div class="rd-ft-job rd-ft-job-${j.status}">
-          <span class="rd-ft-job-dir">${dirIcon}</span>
-          <div class="rd-ft-job-main">
-            <div class="rd-ft-job-top"><span class="rd-ft-job-name">${escapeHtml(j.label)}</span>
-              <span class="rd-ft-job-status">${escapeHtml(status)}</span></div>
-            <div class="rd-ft-bar"><div class="rd-ft-bar-fill" style="width:${pct}%"></div></div>
+        const running = j.status === 'running' || j.status === 'starting';
+        const where = j.kind === 'download' ? 'vers cet ordinateur' : 'vers le poste distant';
+        const eta = running && j.speedBps > 0 && j.totalSize > j.doneBytes ? ftEta((j.totalSize - j.doneBytes) / j.speedBps) : '';
+        const detail = running
+          ? `${ftSize(j.doneBytes)} sur ${j.totalSize ? ftSize(j.totalSize) : '?'}` +
+            (j.speedBps > 0 ? ` · ${ftSize(j.speedBps)}/s` : '') +
+            (eta ? ` · ${eta} restant${eta.endsWith('s') ? 'es' : ''}` : '')
+          : j.status === 'done'
+            ? `Terminé · ${ftSize(Math.max(j.doneBytes, j.totalSize))}`
+            : j.status === 'cancelled'
+              ? 'Annulé'
+              : `Échec : ${j.error ?? 'erreur inconnue'}`;
+        return `<div class="ftx-job is-${j.status}">
+          <span class="ftx-job-dir">${iconHtml(j.kind === 'download' ? 'sendLeft' : 'sendRight')}</span>
+          <div class="ftx-job-main">
+            <div class="ftx-job-top"><b class="ftx-job-name">${escapeHtml(j.label)}</b><span class="ftx-job-where">${where}</span>
+              <span class="ftx-spacer"></span><span class="ftx-job-detail">${escapeHtml(detail)}</span></div>
+            <div class="ftx-bar"><i style="width:${pct}%"></i></div>
           </div>
-          ${cancellable ? `<button type="button" class="rd-btn rd-ft-job-cancel" data-job="${j.id}" title="Cancel">${iconHtml('close')}</button>` : ''}
+          ${running ? `<button type="button" class="ftx-ib" data-job="${j.id}" title="Annuler" aria-label="Annuler ${escapeHtml(j.label)}">${iconHtml('close')}</button>` : ''}
         </div>`;
       })
       .join('');
-    wrap.querySelectorAll<HTMLButtonElement>('[data-job]').forEach((b) =>
-      b.addEventListener('click', () => {
-        const job = this.jobById(Number(b.dataset.job));
-        if (job) this.cancelJob(job);
-      }),
-    );
   }
 
   private log(message: string): void {
     const line = document.createElement('div');
-    line.className = 'rd-ft-logline';
-    const ts = new Date().toLocaleTimeString();
-    line.textContent = `${ts}  ${message}`;
+    line.className = 'ftx-logline';
+    line.textContent = `${new Date().toLocaleTimeString('fr-FR')}  ${message}`;
     this.el.logWrap.appendChild(line);
     this.el.logWrap.scrollTop = this.el.logWrap.scrollHeight;
   }
@@ -1426,5 +1647,10 @@ export class FilePanel {
     const connected = this.state === 'streaming';
     this.el.btnSend.disabled = !connected || this.localSel.size === 0;
     this.el.btnRecv.disabled = !connected || this.remoteSel.size === 0;
+    const remoteSel = this.remoteSel.size;
+    q<HTMLButtonElement>(this.el.panel, '#rd-ft-remote-rename').disabled = !connected || remoteSel !== 1;
+    q<HTMLButtonElement>(this.el.panel, '#rd-ft-remote-del').disabled = !connected || remoteSel === 0;
+    q<HTMLButtonElement>(this.el.panel, '#rd-ft-remote-new').disabled = !connected;
   }
+
 }

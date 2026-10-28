@@ -587,23 +587,6 @@
   flex-direction: column;
 }
 
-/* The file panel was built as a self-positioning overlay; inside the Files
-   pane it becomes a plain filling child, and the pane shell owns closing. */
-.rd-pane [id='rd-ft-overlay'] {
-  position: static !important;
-  inset: auto !important;
-  width: 100% !important;
-  height: 100% !important;
-  max-width: none !important;
-  transform: none !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-}
-.rd-pane #rd-ft-close {
-  display: none !important;
-}
-
 /* Chat */
 .rd-pane-chat {
   padding: 0;
@@ -1370,54 +1353,6 @@
     bottom: 6px;
     max-width: calc(100vw - 12px);
   }
-}
-
-/* --- file panel inside the side panel ------------------------------------------
-   The transfer UI was designed as a wide two-column overlay. Inside the 380px
-   Files tab it stacks: browser files on top, remote device below, with the
-   transfer buttons between — Send points down at the device pane, Receive
-   points back up. The media query in file-panel.css cannot do this because it
-   watches the window, not the container. */
-
-.rd-pane .rd-ft-panes {
-  grid-template-columns: 1fr;
-  grid-template-rows: 1fr auto 1fr;
-  gap: 8px;
-}
-.rd-pane .rd-ft-mid {
-  flex-direction: row;
-  justify-content: center;
-  gap: 8px;
-}
-.rd-pane .rd-ft-mid .rd-ft-go {
-  flex: 1;
-  max-width: 160px;
-  padding: 8px;
-}
-/* → becomes ↓ (toward the device pane below); ← becomes ↑. */
-.rd-pane .rd-ft-mid .rd-ft-go svg,
-.rd-pane .rd-ft-mid .rd-ft-go i {
-  transform: rotate(90deg);
-}
-.rd-pane .rd-ft-col-mod {
-  display: none; /* three columns cannot breathe at this width */
-}
-.rd-pane .rd-ft-bottom {
-  height: 130px;
-  flex: 0 0 auto;
-}
-.rd-pane .rd-ft-head {
-  padding: 8px 10px;
-}
-.rd-pane .rd-ft-title span {
-  display: none; /* the tab header already says Files */
-}
-.rd-pane .rd-ft-pane-head {
-  padding: 7px 9px;
-  gap: 8px;
-}
-.rd-pane .rd-ft-pathrow {
-  padding: 6px 8px;
 }
 
 /* Dark, thin scrollbars — the UA default renders as white slabs here. */
