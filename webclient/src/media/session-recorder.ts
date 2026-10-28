@@ -166,7 +166,7 @@ export const browserRecordingEnvironment: RecordingEnvironment = {
     const link = document.createElement('a');
     const stamp = new Date(startedAtMs).toISOString().replace(/[:.]/g, '-');
     link.href = url;
-    link.download = `cortendesk-session-${stamp}.${extension}`;
+    link.download = `rtdesk-session-${stamp}.${extension}`;
     link.style.display = 'none';
     document.body.appendChild(link);
     link.click();

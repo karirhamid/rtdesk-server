@@ -32,7 +32,7 @@
                             <i class="ri-file-copy-line me-1"></i>Copy
                         </button>
                         <button type="button" class="btn btn-sm btn-light"
-                                onclick="(function(){var t=Array.from(document.querySelectorAll('#recovery-codes span')).map(e=>e.textContent.trim()).join('\n');var b=new Blob([t],{type:'text/plain'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='cortendesk-recovery-codes.txt';a.click();})()">
+                                onclick="(function(){var t=Array.from(document.querySelectorAll('#recovery-codes span')).map(e=>e.textContent.trim()).join('\n');var b=new Blob([t],{type:'text/plain'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='rtdesk-recovery-codes.txt';a.click();})()">
                             <i class="ri-download-2-line me-1"></i>Download
                         </button>
                         <button type="button" class="btn btn-sm btn-primary ms-auto" wire:click="dismissRecoveryCodes">

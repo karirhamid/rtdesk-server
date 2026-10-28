@@ -17,7 +17,7 @@ class DiagnosticsController extends Controller
     {
         return response()->streamDownload(function () use ($diagnostics): void {
             echo json_encode($diagnostics->sanitized(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        }, 'cortendesk-diagnostics.json', [
+        }, 'rtdesk-diagnostics.json', [
             'Cache-Control' => 'no-store, private',
             'Content-Type' => 'application/json',
         ]);
