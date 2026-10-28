@@ -26,7 +26,7 @@
                     @yield('content')
 
                     <div class="text-center mt-3">
-                        <p class="rd-auth-note">CortenDesk — self-hosted RustDesk console</p>
+                        <p class="rd-auth-note">RTDESK — RIRAKTECH SARL</p>
                     </div>
                 </div>
             </div>

@@ -1,4 +1,4 @@
-// CortenDesk web client — main-thread UI shell: top bar, command dock, side panel, connect overlay.
+// RTDesk web client — main-thread UI shell: top bar, command dock, side panel, connect overlay.
 //
 // DOM id contract (the Blade view provides some; each is created here if missing, and
 // #rd-canvas / #rd-side / #rd-overlay are normalized INTO #rd-viewport on mount):
@@ -39,7 +39,6 @@ import {
 import { RESTART_RECONNECT_TIMEOUT_MS, nextRestartReconnectDelay } from '../core/session-controls';
 import { buildLockScreenKeyCommand, buildSecurityControlMenu } from './session-controls-menu';
 import {
-  overlayVersion,
   QUALITY,
   STATE_LABEL,
   buildSessionConfig,
@@ -532,10 +531,10 @@ export class RdApp {
         .join('') || '?';
     this.el.toolbar.innerHTML = `
       <div class="rd-tb-brand">
-        <img src="/rdclient/logo.png" alt="" width="30" height="30">
-        <span class="rd-tb-brandtext">
-          <span class="rd-tb-name">Corten<span>Desk</span></span>
-          <span class="rd-tb-sub">RustDesk Remote Console</span>
+        
+        <span class="rd-tb-brandtext rt-logo" role="img" aria-label="RTDesk, RIRAKTECH HELPDESK">
+          <span class="rt-logo-name"><b>RT</b>Desk</span>
+          <span class="rt-logo-tag">RIRAKTECH HELPDESK</span>
         </span>
       </div>
       <div class="rd-tb-island">
@@ -548,19 +547,19 @@ export class RdApp {
         </span>
         <span class="rd-island-sep rd-stream-only" aria-hidden="true"></span>
         <span class="rd-recording-indicator rd-stream-only" id="rd-recording-indicator" hidden aria-live="polite">REC <span>00:00</span></span>
-        <button type="button" class="rd-ib rd-stream-only" id="rd-btn-monitors" title="Select monitor" aria-label="Select monitor" aria-haspopup="true" hidden>${iconHtml('monitor')}</button>
-        <button type="button" class="rd-ib rd-stream-only" id="rd-btn-fullscreen" title="Fullscreen" aria-label="Fullscreen" aria-pressed="false">${iconHtml('fullscreen')}</button>
-        <button type="button" class="rd-ib rd-stream-only" id="rd-btn-more" title="More options" aria-label="More options" aria-haspopup="true">${iconHtml('more')}</button>
+        <button type="button" class="rd-ib rd-stream-only" id="rd-btn-monitors" title="Choisir l’écran" aria-label="Choisir l’écran" aria-haspopup="true" hidden>${iconHtml('monitor')}</button>
+        <button type="button" class="rd-ib rd-stream-only" id="rd-btn-fullscreen" title="Plein écran" aria-label="Plein écran" aria-pressed="false">${iconHtml('fullscreen')}</button>
+        <button type="button" class="rd-ib rd-stream-only" id="rd-btn-more" title="Plus d’options" aria-label="Plus d’options" aria-haspopup="true">${iconHtml('more')}</button>
         <span class="rd-island-sep rd-stream-only" aria-hidden="true"></span>
         <button type="button" class="rd-chip rd-stream-only" id="rd-btn-fit" aria-haspopup="true" title="Scale mode">
           <span id="rd-fit-label">Fit to screen</span>${iconHtml('chevronDown')}
         </button>
-        <button type="button" class="rd-chip rd-stream-only" id="rd-btn-viewonly" aria-pressed="false" title="Block all input to the remote device">
-          ${iconHtml('eye')}<span>View only</span>
+        <button type="button" class="rd-chip rd-stream-only" id="rd-btn-viewonly" aria-pressed="false" title="Bloquer le clavier et la souris du poste">
+          ${iconHtml('eye')}<span>Lecture seule</span>
         </button>
-        <button type="button" class="rd-disconnect rd-stream-only" id="rd-btn-disconnect">Disconnect</button>
+        <button type="button" class="rd-disconnect rd-stream-only" id="rd-btn-disconnect">Déconnecter</button>
       </div>
-      <div class="rd-tb-user">
+      <div class="rd-tb-user"><button type="button" class="rt-theme-btn" id="rt-theme-toggle" title="Mode clair / sombre" aria-label="Basculer entre le mode clair et le mode sombre"><svg class="rt-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg><svg class="rt-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
         <span class="rd-avatar" title="${escapeHtml(this.cfg?.myName || this.cfg?.myId || '')}">${escapeHtml(initials)}</span>
       </div>`;
     const t = this.el.toolbar;
@@ -1627,33 +1626,33 @@ export class RdApp {
     this.el.overlay.innerHTML = `
       <div class="rd-card">
         <div class="rd-brand">
-          <img class="rd-logo" src="/rdclient/logo.png" alt="CortenDesk" width="60" height="60">
-          <span class="rd-wordmark">Corten<span>Desk</span></span>
+          
+          <span class="rt-logo rt-logo-lg" role="img" aria-label="RTDesk, RIRAKTECH HELPDESK"><span class="rt-logo-name"><b>RT</b>Desk</span><span class="rt-logo-tag">RIRAKTECH HELPDESK</span></span>
         </div>
-        <div class="rd-tagline">Web-Based Client ${overlayVersion(this.cfg)}</div>
+        
         <div class="rd-divider" aria-hidden="true"></div>
-        <p class="rd-help">Enter the client's temporary or permanent password assigned in the RustDesk client.</p>
+        
         <div class="rd-target" id="rd-target" hidden>
           <span class="rd-target-ic">${device}</span>
-          <span class="rd-target-cap">Client ID</span>
-          <span class="rd-target-id" id="rd-overlay-peer"></span>
+          <span class="rd-target-cap">ID du poste</span>
+          <span class="rd-target-id" id="rd-overlay-peer"></span><span class="rt-info" tabindex="0" role="button" aria-label="Aide" data-tip="Saisissez le mot de passe temporaire affiché sur le poste distant, ou son mot de passe permanent."><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
         </div>
         <label class="rd-field" id="rd-field-id" hidden>
           <span class="rd-input">
             <span class="rd-input-ic">${device}</span>
-            <input id="rd-peer-id" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Device ID">
+            <input id="rd-peer-id" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="ID du poste">
           </span>
         </label>
         <div class="rd-connect-row">
           <span class="rd-input">
             <span class="rd-input-ic">${lock}</span>
-            <input id="rd-password" type="password" autocomplete="new-password" placeholder="Enter password">
+            <input id="rd-password" type="password" autocomplete="new-password" placeholder="Mot de passe">
           </span>
-          <button type="button" class="rd-go" id="rd-connect" aria-label="Connect">${arrow}</button>
+          <button type="button" class="rd-go" id="rd-connect" aria-label="Se connecter" title="Se connecter">${arrow}</button>
         </div>
         <label class="rd-save">
           <input type="checkbox" id="rd-save-pw">
-          <span>Save password on this device</span>
+          <span>Mémoriser le mot de passe sur cet ordinateur</span>
         </label>
         <div class="rd-msg" id="rd-msg">
           <div class="rd-overlay-status" id="rd-overlay-status" hidden>
@@ -1661,7 +1660,7 @@ export class RdApp {
           </div>
           <div class="rd-overlay-error" id="rd-overlay-error" role="alert" hidden></div>
         </div>
-        <button type="button" class="rd-chip" id="rd-restart-cancel" hidden>Cancel reconnect</button>
+        <button type="button" class="rd-chip" id="rd-restart-cancel" hidden>Annuler la reconnexion</button>
       </div>`;
     const o = this.el.overlay;
     this.el.overlayPeer = q(o, '#rd-overlay-peer');
@@ -1693,7 +1692,7 @@ export class RdApp {
     const has = !!peerId && loadSavedHash(peerId) !== null;
     this.el.saveCheckbox.checked = has;
     this.el.passwordInput.value = '';
-    this.el.passwordInput.placeholder = has ? 'Saved password — click to change' : 'Enter password';
+    this.el.passwordInput.placeholder = has ? 'Mot de passe mémorisé — cliquez pour le changer' : 'Mot de passe';
   }
 
   /**
@@ -2072,7 +2071,7 @@ export class RdApp {
         const hasDisplayControls = !!currentDisplay?.resolutions.length || !!currentDisplay?.originalResolution ||
           !!parseVirtualDisplayCapability(this.peerPlatform, this.platformAdditions);
         this.el.btnMonitors.hidden = this.displays.length < 2 && !hasDisplayControls;
-        document.title = `${this.peerId} — CortenDesk`;
+        document.title = `${this.peerId} — RTDesk`;
         break;
       }
       case 'switchDisplay': {
@@ -2186,7 +2185,7 @@ export class RdApp {
           // The stored credential no longer works (password changed) — drop it.
           clearSavedHash(this.peerId);
           this.el.saveCheckbox.checked = false;
-          this.el.passwordInput.placeholder = 'Enter password';
+          this.el.passwordInput.placeholder = 'Mot de passe';
           this.connectedWithSavedHash = false;
         }
         this.showOverlay();
@@ -2442,7 +2441,7 @@ export class RdApp {
    * Apply a peer-advertised permission to the chrome.
    *
    * The peer is the only thing that ENFORCES these — a server policy (a
-   * CortenDesk strategy, or the user's own settings) is applied on the
+   * RTDesk strategy, or the user's own settings) is applied on the
    * controlled machine, and it will refuse the capability whatever this client
    * does. Gating here is purely so the operator sees a disabled control instead
    * of clicking one that silently fails.

@@ -1,4 +1,4 @@
-# CortenDesk container nginx — rendered by entrypoint.sh with envsubst
+# RTDesk container nginx — rendered by entrypoint.sh with envsubst
 # (only the ${...} variables listed there are substituted; $nginx_vars are
 # untouched).
 worker_processes auto;

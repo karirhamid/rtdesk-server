@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * The console side of the link with CortenDesk Server (hbbs 1.1.0+), issues
+ * The console side of the link with the RTDesk ID server (hbbs 1.1.0+), issues
  * #81, #82 and #76. hbbs pulls policy() every few seconds and enforces it;
  * it posts LAN addresses back. Wire contract: docs/server-link.md.
  */

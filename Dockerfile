@@ -1,4 +1,4 @@
-# CortenDesk — self-hosted RustDesk console, ID server and relay in one image.
+# RTDesk — self-hosted RustDesk console, ID server and relay in one image.
 #
 #   docker build -t cortendesk .
 #   docker run -p 8080:8080 -p 21115-21119:21115-21119 -p 21116:21116/udp \

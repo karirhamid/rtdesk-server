@@ -1,9 +1,9 @@
-// CortenDesk web client — in-session file-transfer panel.
+// RTDesk web client — in-session file-transfer panel.
 //
 // Slides over the live desktop viewport (no separate window, no second login):
 // the panel opens its own FILE_TRANSFER relay connection to the same peer,
 // authenticating silently with the h1 credential the desktop session already
-// proved. Dual-pane manager in the CortenDesk style: local computer left,
+// proved. Dual-pane manager in the RTDesk style: local computer left,
 // remote computer right, Send/Receive between them, transfer queue + event
 // log at the bottom, close (×) returns to the desktop.
 //

@@ -1,5 +1,5 @@
-// Build the CortenDesk web client into ../public/rdclient/ (committed output,
-// honoring the CortenDesk no-build-step rule for the app itself: built once on
+// Build the RTDesk web client into ../public/rdclient/ (committed output,
+// honoring the RTDesk no-build-step rule for the app itself: built once on
 // the dev machine, the bundle is served statically by Laravel).
 //
 //   npm run build            one-shot production bundle

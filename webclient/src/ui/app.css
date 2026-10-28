@@ -1,4 +1,4 @@
-/* CortenDesk web client — top bar, command dock, side panel, connect overlay.
+/* RTDesk web client — top bar, command dock, side panel, connect overlay.
    Dark by default; light overrides keyed off the console's data-bs-theme.
    Palette mirrors the console's own tokens so the client reads as the same
    product, not a bolted-on page. */

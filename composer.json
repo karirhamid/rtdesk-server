@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "laravel/laravel",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
+    "description": "RTDesk Server: console, ID server and relay for RTDesk remote support (RIRAKTECH SARL).",
     "keywords": ["laravel", "framework"],
     "license": "AGPL-3.0-only",
     "require": {

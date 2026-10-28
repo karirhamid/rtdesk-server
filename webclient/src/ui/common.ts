@@ -25,7 +25,7 @@ export const QUALITY = { best: 4, balanced: 3, speed: 2 } as const; // ImageQual
  * (window.__RD__.version) and read via overlayVersion() below.
  *
  * The web client is not released independently — it only ships inside a
- * CortenDesk release — so it carries the project version rather than one of
+ * RTDesk release — so it carries the project version rather than one of
  * its own. Taking it at runtime matters: the bundle is rebuilt only when
  * webclient/src changes, so a version baked in at build time would still claim
  * the older release on every release that did not touch the client.

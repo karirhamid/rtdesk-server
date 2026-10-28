@@ -133,7 +133,7 @@ final class FtpTarget implements RemoteTarget
             $name = 'cortendesk-write-test-'.bin2hex(random_bytes(3)).'.tmp';
             $file = tempnam(sys_get_temp_dir(), 'ftp-test');
             try {
-                file_put_contents($file, "CortenDesk connection test. Safe to delete.\n");
+                file_put_contents($file, "RTDesk connection test. Safe to delete.\n");
                 if (! $this->upload($conn, $file, $name, false, self::TIMEOUT)) {
                     // The server confirmed late and the connection was closed.
                     $conn = $this->connect();
@@ -315,7 +315,7 @@ final class FtpTarget implements RemoteTarget
 
         if ($this->tls) {
             if (str_contains($reply, 'handshake failed')) {
-                return new RuntimeException("The TLS handshake with {$where} failed. CortenDesk needs TLS 1.2 or later; check that the FTP server offers it.");
+                return new RuntimeException("The TLS handshake with {$where} failed. RTDesk needs TLS 1.2 or later; check that the FTP server offers it.");
             }
             if (preg_match('/SSL (read|write) failed/', $reply)) {
                 return new RuntimeException("{$where} closed the TLS session during login ({$reply}). Two common causes: the server failing right after login, such as vsftpd refusing a writable chroot directory (\"500 OOPS\"), or a server that requires a client certificate, which is not supported.");

@@ -604,14 +604,14 @@ class BackupService
             }
             $manifest = json_decode((string) $tar['manifest.json']->getContent(), true);
         } catch (Throwable) {
-            throw new RuntimeException('That file is not a CortenDesk backup.');
+            throw new RuntimeException('That file is not a RTDesk backup.');
         }
 
         if (! is_array($manifest) || ($manifest['app'] ?? null) !== 'cortendesk') {
-            throw new RuntimeException('That file is not a CortenDesk backup.');
+            throw new RuntimeException('That file is not a RTDesk backup.');
         }
         if ((int) ($manifest['format'] ?? 0) !== self::FORMAT) {
-            throw new RuntimeException('That backup was written in a format this version cannot read. Upgrade CortenDesk first.');
+            throw new RuntimeException('That backup was written in a format this version cannot read. Upgrade RTDesk first.');
         }
 
         return $manifest;
@@ -653,7 +653,7 @@ class BackupService
             $unknown = array_diff($restore, $live);
             if ($unknown !== []) {
                 throw new RuntimeException(
-                    'The backup was made with CortenDesk '.($manifest['app_version'] ?? '?')
+                    'The backup was made with RTDesk '.($manifest['app_version'] ?? '?')
                     .' and contains tables this install does not have ('.implode(', ', $unknown).'). Upgrade first, then restore.'
                 );
             }

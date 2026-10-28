@@ -11,7 +11,7 @@ use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Endpoints CortenDesk Server (hbbs) calls. Authenticated by the shared
+ * Endpoints the RTDesk ID server (hbbs) calls. Authenticated by the shared
  * secret (VerifyServerSecret). Contract: docs/server-link.md.
  */
 class ServerLinkController extends Controller

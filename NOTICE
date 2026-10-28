@@ -1,8 +1,35 @@
-CortenDesk licensing notes
-==========================
+RTDesk Server
+=============
 
-CortenDesk is licensed under the GNU Affero General Public License v3.0
-(see LICENSE).
+Copyright (C) 2026 RIRAKTECH SARL
+
+RTDesk Server is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License, version 3 only
+(see LICENSE). It comes with ABSOLUTELY NO WARRANTY.
+
+Origin
+------
+
+RTDesk Server is a modified version of CortenDesk 1.15.0
+(https://github.com/marcpope/cortendesk), Copyright (C) Marc Pope and the
+CortenDesk contributors, licensed AGPL-3.0-only. RIRAKTECH SARL modified it
+from 28 October 2026 on: RTDesk name and logos, French texts in the web
+client, self-enrollment of RTDesk installs, and device approval and
+incoming-only endpoints in the automation API. The git history of this
+repository lists every change and its date.
+
+The bundled ID and relay servers (hbbs, hbbr) are CortenDesk Server
+(https://github.com/marcpope/cortendesk-server), a fork of rustdesk-server,
+licensed AGPL-3.0.
+
+Source code
+-----------
+
+https://github.com/karirhamid/rtdesk-server
+
+The AGPL requires that everyone who uses a modified version over a network
+can get its source code; the console links to the repository above. Keep
+that link working if you run a changed copy.
 
 Third-party files shipped under public/assets/, each under its own
 license (the license text sits next to the files):
@@ -16,7 +43,7 @@ license (the license text sits next to the files):
   fonts/figtree/       Figtree font files, SIL Open Font License 1.1,
                        (c) The Figtree Project Authors
 
-Everything else under public/assets/ is part of CortenDesk and covered by
+Everything else under public/assets/ is part of RTDesk Server and covered by
 the AGPL.
 
 The vendored RustDesk protocol definitions (webclient/protos/) originate

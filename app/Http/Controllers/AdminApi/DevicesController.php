@@ -77,6 +77,29 @@ class DevicesController extends AdminApiController
         return $this->ok($this->serialize($device), 'Device enabled.');
     }
 
+    /** POST /api/v1/devices/{device}/approve — let a pending device in (RTDESK; as Devices → Pending). */
+    public function approve(Device $device): JsonResponse
+    {
+        if ($device->isPending()) {
+            $device->update(['status' => Device::STATUS_ACTIVE]);
+            ConsoleAudit::record('device.approve', 'Approved device '.$device->rustdesk_id.' (API)', 'device', $device->rustdesk_id);
+        }
+
+        return $this->ok($this->serialize($device->refresh()), 'Device approved.');
+    }
+
+    /** POST /api/v1/devices/{device}/incoming-only — {incoming_only: bool} (RTDESK; as the Devices bulk action). */
+    public function incomingOnly(Request $request, Device $device): JsonResponse
+    {
+        $incoming = $request->boolean('incoming_only');
+        if ($device->isIncomingOnly() !== $incoming) {
+            $device->update(['can_initiate' => ! $incoming]);
+            ConsoleAudit::record('device.incoming_only', ($incoming ? 'Set incoming only: ' : 'Allowed to start sessions: ').$device->rustdesk_id.' (API)', 'device', $device->rustdesk_id);
+        }
+
+        return $this->ok($this->serialize($device->refresh()), $incoming ? 'Device set to incoming only.' : 'Device may start sessions.');
+    }
+
     /** POST /api/v1/devices/{device}/disable — soft-delete (revocable). */
     public function disable(Device $device): JsonResponse
     {
@@ -196,6 +219,8 @@ class DevicesController extends AdminApiController
             'user' => $device->user ? ['id' => $device->user->id, 'username' => $device->user->username] : null,
             'device_group' => $device->group ? ['id' => $device->group->id, 'name' => $device->group->name] : null,
             'disabled' => $device->trashed(),
+            // RTDESK: can be helped but cannot start sessions (enforced by the ID server).
+            'incoming_only' => $device->isIncomingOnly(),
             'possible_duplicates' => $device->trashed() ? [] : $duplicates->rustdeskIdsOf($device->id),
         ];
     }

@@ -1,6 +1,6 @@
 import type { SupportedDecoding_PreferCodec } from '../gen/message';
 
-// CortenDesk web client — CROSS-MODULE CONTRACT.
+// RTDesk web client — CROSS-MODULE CONTRACT.
 //
 // SCAFFOLD-OWNED. Every module imports from this file; NO ONE else edits it.
 // The shapes below are the frozen boundary between the UI (main thread) and the

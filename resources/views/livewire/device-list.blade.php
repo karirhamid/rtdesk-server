@@ -346,12 +346,12 @@
                                      the only cell in the console with four colours. --}}
                                 @if (config('cortendesk.native_webclient'))
                                     <a href="{{ route('webclient') }}?id={{ $device->rustdesk_id }}"
-                                       target="cortendesk-webclient" rel="noopener" class="rd-act me-2"
+                                       target="rtdesk-webclient" rel="noopener" class="rd-act me-2"
                                        title="Connect in the browser (native client)"><i class="ri-remote-control-line me-1"></i>Connect</a>
                                 @endif
                                 @if (config('cortendesk.webclient_url'))
                                     <a href="{{ config('cortendesk.webclient_url') }}?id={{ $device->rustdesk_id }}"
-                                       target="cortendesk-webclient" rel="noopener" class="rd-act me-2"
+                                       target="rtdesk-webclient" rel="noopener" class="rd-act me-2"
                                        title="Connect in the browser">Web Client</a>
                                 @endif
                                 <a href="{{ route('devices.show', $device->id) }}" class="rd-act me-2" title="View details"><i class="ri-eye-line"></i></a>
@@ -445,12 +445,12 @@
                             @else
                                 @if (config('cortendesk.native_webclient'))
                                     <a href="{{ route('webclient') }}?id={{ $device->rustdesk_id }}"
-                                       target="cortendesk-webclient" rel="noopener" class="rd-iconbtn"
+                                       target="rtdesk-webclient" rel="noopener" class="rd-iconbtn"
                                        title="Connect in the browser (native client)"><i class="ri-remote-control-line"></i></a>
                                 @endif
                                 @if (config('cortendesk.webclient_url'))
                                     <a href="{{ config('cortendesk.webclient_url') }}?id={{ $device->rustdesk_id }}"
-                                       target="cortendesk-webclient" rel="noopener" class="rd-iconbtn"
+                                       target="rtdesk-webclient" rel="noopener" class="rd-iconbtn"
                                        title="Connect in the browser"><i class="ri-global-line"></i></a>
                                 @endif
                                 <a href="{{ route('devices.show', $device->id) }}" class="rd-iconbtn" title="View details"><i class="ri-eye-line"></i></a>

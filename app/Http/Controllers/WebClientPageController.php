@@ -33,7 +33,7 @@ class WebClientPageController extends Controller
             'wsIdUrl' => $wsIdUrl,
             'wsRelayUrl' => $wsRelayUrl,
             'myId' => 'web-'.$user->id,
-            'myName' => $user->name ?: ($user->username ?? 'CortenDesk'),
+            'myName' => $user->name ?: ($user->username ?? 'RTDesk'),
             // Lets the ID server tell this page from an unknown device when
             // only approved devices may connect (docs/server-link.md).
             'signalToken' => ServerLink::webTicket($user),

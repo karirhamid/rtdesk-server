@@ -1,5 +1,5 @@
 /**
- * CortenDesk front-end helpers. Plain script, no build step.
+ * RTDesk front-end helpers. Plain script, no build step.
  */
 (function () {
     'use strict';

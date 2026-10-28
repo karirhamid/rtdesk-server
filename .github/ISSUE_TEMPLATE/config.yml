@@ -1,8 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: Security vulnerability
-    url: https://github.com/marcpope/cortendesk/security/advisories/new
-    about: Report it privately here, not as a public issue.
-  - name: Documentation
-    url: https://github.com/marcpope/cortendesk/wiki
-    about: Install, upgrade, settings reference, troubleshooting.

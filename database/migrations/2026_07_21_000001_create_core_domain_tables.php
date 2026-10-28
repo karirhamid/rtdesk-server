@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Core CortenDesk domain: groups, devices, client API tokens.
+     * Core RTDesk domain: groups, devices, client API tokens.
      * Schema informed by the production lejianwen/rustdesk-api database
      * (docs/production-api-schema.sql) and the RustDesk client contract.
      */

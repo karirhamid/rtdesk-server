@@ -762,7 +762,7 @@ class DeviceList extends Component
     /**
      * Stream the current view as CSV (issue #16). The first fifteen headers
      * match lejianwen/rustdesk-api's device export byte for byte so tooling
-     * built against that format keeps working; CortenDesk-specific columns
+     * built against that format keeps working; RTDesk-specific columns
      * are appended after. Scoping is the list's own: a non-admin exports only
      * the devices they can see.
      */

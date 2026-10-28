@@ -37,7 +37,7 @@ class Restore extends Command
             return self::FAILURE;
         }
 
-        $this->line('Backup from '.($manifest['created_at'] ?? '?').', CortenDesk '.($manifest['app_version'] ?? '?').', '.array_sum((array) ($manifest['tables'] ?? [])).' rows.');
+        $this->line('Backup from '.($manifest['created_at'] ?? '?').', RTDesk '.($manifest['app_version'] ?? '?').', '.array_sum((array) ($manifest['tables'] ?? [])).' rows.');
 
         if (! $this->option('force') && ! $this->confirm('This replaces every setting, user, device and log in this install. Continue?')) {
             return self::SUCCESS;

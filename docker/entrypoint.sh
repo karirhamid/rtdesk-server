@@ -1,5 +1,5 @@
 #!/bin/sh
-# CortenDesk container bootstrap: bring up the ID server and relay, render the
+# RTDesk container bootstrap: bring up the ID server and relay, render the
 # nginx config, ensure APP_KEY and database exist, migrate, cache, then hand
 # off to supervisord.
 set -e
@@ -222,7 +222,7 @@ if ! _is_uint "$_max_mb" || [ "$_max_mb" -lt 1 ]; then
 fi
 export CORTENDESK_DOWNLOADS_MAX_MB="$_max_mb"
 # Headroom over the app limit: Livewire accepts 1 MB more than it so the
-# operator sees CortenDesk's own message, plus the multipart framing.
+# operator sees RTDesk's own message, plus the multipart framing.
 export CORTENDESK_UPLOAD_BODY_MB=$((_max_mb + 16))
 cat > /usr/local/etc/php/conf.d/zz-cortendesk-uploads.ini <<EOF
 ; Written by entrypoint.sh from CORTENDESK_DOWNLOADS_MAX_MB. Edits are lost.

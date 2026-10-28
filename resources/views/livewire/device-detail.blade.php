@@ -28,7 +28,7 @@
                        title="Connect with RustDesk"><i class="ri-links-line me-1"></i>RustDesk</a>
                     @if (config('cortendesk.native_webclient'))
                         <a href="{{ route('webclient') }}?id={{ $device->rustdesk_id }}"
-                           target="cortendesk-webclient" rel="noopener" class="btn btn-sm btn-primary">
+                           target="rtdesk-webclient" rel="noopener" class="btn btn-sm btn-primary">
                             <i class="ri-remote-control-line me-1"></i>Connect</a>
                     @endif
                     @if ($canEdit)

@@ -23,7 +23,7 @@
 |   PHP    post_max_size          limit + 16 MB  (written at boot)
 |   PHP    upload_max_filesize    limit + 16 MB  (written at boot)
 |   Livewire temporary_file_upload.rules  limit + 1 MB  <- here
-|   CortenDesk cortendesk.downloads_max_kb  limit (default 512 MB)
+|   RTDesk cortendesk.downloads_max_kb  limit (default 512 MB)
 |
 | In the Docker image docker/entrypoint.sh renders the nginx and PHP values
 | from CORTENDESK_DOWNLOADS_MAX_MB (or the older CORTENDESK_DOWNLOADS_MAX_KB),
@@ -38,7 +38,7 @@ return [
         'disk' => env('LIVEWIRE_TEMPORARY_FILE_UPLOAD_DISK'),
         // Deliberately 1 MB looser than cortendesk.downloads_max_kb (same env
         // expression as config/cortendesk.php): a file just over the limit
-        // then reaches the component, and the operator gets CortenDesk's own
+        // then reaches the component, and the operator gets RTDesk's own
         // message naming the limit instead of Livewire's silent 422 at the
         // upload endpoint.
         'rules' => ['required', 'file', 'max:'.(1024 + (is_numeric(env('CORTENDESK_DOWNLOADS_MAX_MB'))

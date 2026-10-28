@@ -1,4 +1,4 @@
-# CortenDesk + MySQL. One image: console, ID server and relay.
+# RTDesk + MySQL. One image: console, ID server and relay.
 #
 # Set APP_URL to the address your clients and browsers reach — everything else
 # is derived from it, including what hbbs tells clients about the relay. Leave
@@ -7,7 +7,7 @@
 # For a zero-dependency trial the image also runs standalone on SQLite:
 #   docker run -p 8080:8080 -p 21115-21119:21115-21119 -p 21116:21116/udp \
 #     -e APP_URL=http://your-host:8080 -v cortendesk-data:/data \
-#     ghcr.io/marcpope/cortendesk:latest
+#     ghcr.io/karirhamid/rtdesk-server:latest
 services:
   cortendesk:
     build: .

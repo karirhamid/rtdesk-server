@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Gate for the endpoints CortenDesk Server calls (docs/server-link.md):
+ * Gate for the endpoints the RTDesk ID server calls (docs/server-link.md):
  * bearer token equal to CORTENDESK_SERVER_SECRET. 404 while no secret is set,
  * so the endpoints do not exist on an unlinked console.
  */

@@ -225,7 +225,7 @@ class AppriseNotifications
     {
         return $this->deliver(
             'test',
-            'CortenDesk notification test',
+            'RTDesk notification test',
             'This is a test notification from '.config('app.name').'.',
             'settings-test',
         );

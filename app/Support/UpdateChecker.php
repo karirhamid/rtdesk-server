@@ -14,12 +14,12 @@ class UpdateChecker
 {
     private const CACHE_KEY = 'cortendesk.latest_version';
 
-    private const VERSION_URL = 'https://raw.githubusercontent.com/marcpope/cortendesk/main/VERSION';
+    private const VERSION_URL = 'https://raw.githubusercontent.com/karirhamid/rtdesk-server/main/VERSION';
 
     /** Release page for a version: what changed, plus the pull lines. */
     public static function releaseNotesUrl(string $version): string
     {
-        return 'https://github.com/marcpope/cortendesk/releases/tag/v'.$version;
+        return 'https://github.com/karirhamid/rtdesk-server/releases/tag/v'.$version;
     }
 
     /** False when CORTENDESK_UPDATE_CHECK turns the check off. */

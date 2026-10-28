@@ -54,6 +54,8 @@ Route::middleware('throttle:240,1,client-auth')->group(function () {
 Route::middleware('throttle:device-sync')->group(function () {
     Route::post('/heartbeat', [SyncController::class, 'heartbeat']);
     Route::post('/sysinfo', [SyncController::class, 'sysinfo']);
+    // RTDESK: an RTDESK install approves itself with the enrollment key of its custom.txt.
+    Route::post('/rtdesk/enroll', [\App\Http\Controllers\Api\RtdeskEnrollController::class, 'enroll'])->middleware('throttle:30,1,rtdesk-enroll');
 
     Route::post('/audit/conn', [AuditController::class, 'connection']);
     Route::post('/audit/file', [AuditController::class, 'file']);
@@ -97,7 +99,7 @@ Route::middleware('auth:client')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| Server link (CortenDesk Server 1.1.0+)
+| Server link (RTDesk ID server 1.1.0+)
 |--------------------------------------------------------------------------
 | Called by hbbs, not by clients: it pulls the device policy and reports LAN
 | addresses. Bearer = CORTENDESK_SERVER_SECRET. Spec: docs/server-link.md.
@@ -135,6 +137,9 @@ Route::middleware(['auth:api-token', 'throttle:120,1,admin-api'])
         Route::get('/devices', [DevicesController::class, 'index'])->middleware('api-token-can:device,r');
         Route::get('/devices/{device}', [DevicesController::class, 'show'])->middleware('api-token-can:device,r');
         Route::post('/devices/{device}/enable', [DevicesController::class, 'enable'])->withTrashed()->middleware('api-token-can:device,rw');
+        // RTDESK: approval and incoming-only from the RTDESK console.
+        Route::post('/devices/{device}/approve', [DevicesController::class, 'approve'])->middleware('api-token-can:device,rw');
+        Route::post('/devices/{device}/incoming-only', [DevicesController::class, 'incomingOnly'])->middleware('api-token-can:device,rw');
         Route::post('/devices/{device}/disable', [DevicesController::class, 'disable'])->middleware('api-token-can:device,rw');
         Route::post('/devices/{device}/assign', [DevicesController::class, 'assign'])->middleware('api-token-can:device,rw');
         Route::delete('/devices/{device}', [DevicesController::class, 'destroy'])->withTrashed()->middleware('api-token-can:device,rw');

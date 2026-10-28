@@ -168,7 +168,7 @@
                                     @php $linkTone = $serverLink['ok'] === true ? 'text-success' : ($serverLink['ok'] === false ? 'text-danger' : 'text-muted'); @endphp
                                     <div class="form-text {{ $linkTone }}" id="server-link-status">
                                         <i class="{{ $serverLink['ok'] === false ? 'ri-error-warning-line' : 'ri-link' }} me-1"></i>ID server link: {{ $serverLink['note'] }}
-                                        @if ($serverLink['ok'] === false) Needs CortenDesk Server 1.1.0 or later linked to this console. @endif
+                                        @if ($serverLink['ok'] === false) Needs the RTDesk ID server 1.1.0 or later linked to this console. @endif
                                     </div>
                                 </div>
                                 <button type="submit" class="btn btn-primary" @disabled(! $canManageSettings)><i class="ri-save-line me-1"></i>Save Settings</button>
@@ -670,7 +670,7 @@
                                            autocomplete="off" data-1p-ignore data-lpignore="true"
                                            placeholder="{{ $appriseEndpointSet ? 'Stored — leave blank to keep' : 'https://apprise.example.com' }}">
                                     @error('appriseEndpoint')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                                    <div class="form-text">Base URL only. CortenDesk appends <code>/notify</code>.</div>
+                                    <div class="form-text">Base URL only. RTDesk appends <code>/notify</code>.</div>
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label">Delivery mode</label>
@@ -819,7 +819,7 @@
                         </div>
                         <div class="card-body">
                             <dl class="rd-deflist">
-                                <div class="rd-def"><dt>CortenDesk</dt><dd class="rd-mono">v{{ config('cortendesk.api_version') }}</dd></div>
+                                <div class="rd-def"><dt>RTDesk</dt><dd class="rd-mono">v{{ config('cortendesk.api_version') }}</dd></div>
                                 <div class="rd-def"><dt>Laravel</dt><dd class="rd-mono">{{ app()->version() }}</dd></div>
                                 <div class="rd-def"><dt>PHP</dt><dd class="rd-mono">{{ PHP_VERSION }}</dd></div>
                             </dl>

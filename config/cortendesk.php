@@ -33,7 +33,7 @@ return [
     |--------------------------------------------------------------------------
     | Server link
     |--------------------------------------------------------------------------
-    | Shared secret between this console and CortenDesk Server (hbbs 1.1.0+).
+    | Shared secret between this console and the RTDesk ID server (hbbs 1.1.0+).
     | hbbs uses it to fetch the device policy and report LAN addresses; the
     | console uses it to sign web client tickets. Empty turns the link off.
     | The Docker image generates one into /data on first boot.

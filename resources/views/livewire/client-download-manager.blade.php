@@ -82,7 +82,7 @@
                                 <p class="rd-empty-title">No client builds uploaded yet.</p>
                                 <p class="rd-empty-text">
                                     Build an installer with <strong>Build Installers</strong>, then upload it here.
-                                    CortenDesk reads the platform off the filename and shows the matching icon on the
+                                    RTDesk reads the platform off the filename and shows the matching icon on the
                                     sign-in page.
                                 </p>
                                 <button type="button" class="btn btn-sm btn-outline-light" wire:click="create" @disabled(! $canManage)>Upload Build</button>

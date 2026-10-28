@@ -146,7 +146,7 @@ class ClientDownloadManager extends Component
             // the bytes that are already there.
             'file' => [$this->editing ? 'nullable' : 'required', 'file', 'max:'.$maxKb, function ($attribute, $value, $fail) {
                 if ($value && ! ClientPlatform::extensionAllowed($value->getClientOriginalName())) {
-                    $fail('That file type is not an installer CortenDesk will hand out. Allowed: '
+                    $fail('That file type is not an installer RTDesk will hand out. Allowed: '
                         .implode(', ', ClientPlatform::allowedExtensions()).'.');
                 }
             }],

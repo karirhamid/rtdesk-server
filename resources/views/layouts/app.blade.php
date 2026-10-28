@@ -5,7 +5,7 @@
     <meta charset="utf-8"/>
     <title>@yield('title', 'Console') | {{ config('app.name') }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="CortenDesk — self-hosted RustDesk server console"/>
+    <meta name="description" content="RTDESK — remote support by RIRAKTECH SARL"/>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="shortcut icon" href="{{ \App\Support\Asset::url('assets/images/cortendesk-sm.svg') }}">
 
@@ -36,7 +36,7 @@
                             <div class="rd-page-head">
                                 <div class="rd-page-crumbs">
                                     <ol class="breadcrumb m-0">
-                                        <li class="breadcrumb-item"><a href="{{ route('overview') }}">CortenDesk</a></li>
+                                        <li class="breadcrumb-item"><a href="{{ route('overview') }}">RTDESK</a></li>
                                         @hasSection('subtitle')
                                             <li class="breadcrumb-item"><a href="javascript:void(0);">@yield('subtitle')</a></li>
                                         @endif
@@ -57,7 +57,7 @@
                 <div class="container-fluid">
                     <div class="row">
                         <div class="col-md-6">
-                            <script>document.write(new Date().getFullYear())</script> © CortenDesk
+                            <script>document.write(new Date().getFullYear())</script> © RIRAKTECH SARL · <a href="https://github.com/karirhamid/rtdesk-server" target="_blank" rel="noopener">Code source (AGPL-3.0)</a>
                         </div>
                         <div class="col-md-6">
                             <div class="text-md-end d-none d-md-block">

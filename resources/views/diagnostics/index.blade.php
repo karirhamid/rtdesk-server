@@ -14,7 +14,7 @@
 
     @php
         $checks = [
-            ['label' => 'Application', 'ok' => $report['application']['ok'], 'detail' => 'CortenDesk v'.$report['application']['version']],
+            ['label' => 'Application', 'ok' => $report['application']['ok'], 'detail' => 'RTDesk v'.$report['application']['version']],
             ['label' => 'Database', 'ok' => $report['database']['ok'], 'detail' => $report['database']['ok'] ? 'Query completed.' : 'Query failed.'],
             ['label' => 'ID server', 'ok' => $report['services']['id_server']['ok'], 'detail' => $report['services']['id_server']['configured'] ? $report['services']['id_server']['host_label'].' on port '.$report['services']['id_server']['port'] : 'Not configured.'],
             ['label' => 'Relay server', 'ok' => $report['services']['relay_server']['ok'], 'detail' => $report['services']['relay_server']['configured'] ? $report['services']['relay_server']['host_label'].' on port '.$report['services']['relay_server']['port'] : 'Not configured.'],

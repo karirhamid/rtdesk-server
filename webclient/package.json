@@ -1,8 +1,8 @@
 {
-  "name": "cortendesk-webclient",
+  "name": "rtdesk-webclient",
   "version": "0.1.0",
   "private": true,
-  "description": "Fully-native in-browser RustDesk controlling client for CortenDesk (relay-only, WebCodecs video, all-TypeScript protocol). AGPL-3.0.",
+  "description": "Fully-native in-browser RustDesk controlling client for RTDesk (relay-only, WebCodecs video, all-TypeScript protocol). AGPL-3.0.",
   "license": "AGPL-3.0-only",
   "type": "module",
   "engines": {

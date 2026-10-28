@@ -2,10 +2,10 @@
 
     <a href="{{ route('overview') }}" class="rd-sidebar-logo">
         <span class="rd-logo-lg">
-            <img src="{{ asset('assets/images/cortendesk-logo-light.svg') }}" alt="CortenDesk" height="24"/>
+            <img src="{{ asset('assets/images/cortendesk-logo-light.svg') }}" alt="RTDESK" height="24"/>
         </span>
         <span class="rd-logo-sm">
-            <img src="{{ asset('assets/images/cortendesk-sm.svg') }}" alt="CortenDesk" height="52" class="mx-auto d-block"/>
+            <img src="{{ asset('assets/images/cortendesk-sm.svg') }}" alt="RTDESK" height="52" class="mx-auto d-block"/>
         </span>
     </a>
 
@@ -65,7 +65,7 @@
 
             @if (config('cortendesk.native_webclient'))
                 <li class="rd-nav-item">
-                    <a href="{{ route('webclient') }}" target="cortendesk-webclient" rel="noopener" class="rd-nav-link">
+                    <a href="{{ route('webclient') }}" target="rtdesk-webclient" rel="noopener" class="rd-nav-link">
                         <i class="ri-global-line"></i>
                         <span> Web Client </span>
                     </a>
@@ -192,7 +192,7 @@
             {{-- With the update check off there is nothing to report. --}}
             @if (\App\Support\UpdateChecker::enabled())
             <span class="rd-sidebar-status {{ $rdUpgrade ? 'rd-sidebar-status-warn' : ($rdChecked ? 'rd-sidebar-status-ok' : 'rd-sidebar-status-unknown') }}"
-                  title="CortenDesk compares the running version against the latest published release.">
+                  title="RTDesk compares the running version against the latest published release.">
                 <i class="rd-dot rd-dot-lg"></i>
                 <span class="rd-sidebar-status-label">
                     @if ($rdUpgrade)
